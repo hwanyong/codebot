@@ -1,6 +1,6 @@
 # Codebot
 
-[![npm version](https://badge.fury.io/js/@uhd_kr%2Fcodebot.svg?v=1.4.5)](https://www.npmjs.com/package/@uhd_kr%2Fcodebot)
+[![npm version](https://badge.fury.io/js/@uhd_kr%2Fcodebot.svg?v=1.6.0)](https://www.npmjs.com/package/@uhd_kr%2Fcodebot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 AI 기반 코딩 어시스턴트 CLI 도구입니다. LangGraph를 사용하여 복잡한 코딩 작업을 수행할 수 있는 다단계 추론 에이전트를 구현했습니다.

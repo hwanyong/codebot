@@ -78,9 +78,24 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
       // 오류 처리
       spinner.fail(i18n.t('error_occurred'));
       console.error(chalk.red(i18n.t('error_message', error.message)));
+
+      // 디버그 모드에서는 상세 오류 정보 표시
+      if (process.env.DEBUG) {
+        console.error(error);
+      }
+
+      // 오류 발생 후에도 세션 유지
+      console.log(chalk.yellow(i18n.t('session_continued')));
     }
 
     rl.prompt();
+  });
+
+  // readline 인터페이스가 닫힐 때 이벤트 처리
+  rl.on('close', () => {
+    console.log(chalk.green(i18n.t('goodbye')));
+    // 프로세스 종료 방지
+    // process.exit(0); // 이 줄을 제거하거나 주석 처리
   });
 }
 
@@ -194,15 +209,21 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
         console.log(chalk.cyan(`${i18n.t('os_info')}:`), `${info.os.platform} ${info.os.release} (${info.os.arch})`);
         console.log(chalk.cyan(`${i18n.t('nodejs_version')}:`), info.node.version);
         console.log(chalk.cyan(`${i18n.t('environment')}:`), info.node.env);
+
+        // 명령어 처리 완료 후 프롬프트 표시
+        rl.prompt();
       } catch (error) {
         console.error(chalk.red(`${i18n.t('info_error')}:`), error);
+        // 오류 발생 시에도 프롬프트 표시
+        rl.prompt();
       }
-      break;
+      return; // 여기서 함수 종료하여 아래의 rl.prompt() 호출 방지
 
     case 'exec':
       if (!args) {
         console.log(chalk.yellow(i18n.t('exec_usage')));
-        break;
+        rl.prompt();
+        return; // 여기서 함수 종료
       }
 
       try {
@@ -217,12 +238,18 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
         if (stdout) console.log(stdout);
         if (stderr) console.error(chalk.yellow(stderr));
         console.log(chalk.green(i18n.t('command_completed')));
+
+        // 명령어 처리 완료 후 프롬프트 표시
+        rl.prompt();
       } catch (error: any) {
         console.error(chalk.red(`${i18n.t('command_error')}:`));
         if (error.stdout) console.log(error.stdout);
         if (error.stderr) console.error(chalk.red(error.stderr));
+
+        // 오류 발생 시에도 프롬프트 표시
+        rl.prompt();
       }
-      break;
+      return; // 여기서 함수 종료하여 아래의 rl.prompt() 호출 방지
 
     case 'exit':
       rl.close();
@@ -255,7 +282,16 @@ async function safeExecute(callback: () => Promise<void>): Promise<void> {
         console.error(error);
       }
     }
-    process.exit(1);
+
+    // chat 명령어에서는 프로세스를 종료하지 않음
+    // 명령어 타입을 확인하기 위해 process.argv를 검사
+    const isRunCommand = process.argv.includes('run');
+
+    if (isRunCommand) {
+      // run 명령어에서만 오류 발생 시 종료
+      process.exit(1);
+    }
+    // chat 명령어에서는 오류 메시지만 표시하고 계속 실행
   }
 }
 

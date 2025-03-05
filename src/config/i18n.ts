@@ -142,6 +142,14 @@ export const cliMessages: I18nMessages = {
     ko: '오류: {0}',
     en: 'Error: {0}'
   },
+  'session_continued': {
+    ko: '세션이 계속됩니다. 새 명령을 입력하세요.',
+    en: 'Session continues. Enter a new command.'
+  },
+  'goodbye': {
+    ko: '안녕히 가세요! Codebot을 종료합니다.',
+    en: 'Goodbye! Exiting Codebot.'
+  },
   'cmd_info_desc': {
     ko: '현재 프로젝트 및 작업 환경 정보를 표시합니다.',
     en: 'Display current project and environment information.'
