@@ -1,7 +1,10 @@
 # Codebot
 
-[![npm version](https://badge.fury.io/js/@uhd_kr%2Fcodebot.svg?v=1.6.0)](https://www.npmjs.com/package/@uhd_kr%2Fcodebot)
+[![npm version](https://badge.fury.io/js/@uhd_kr%2Fcodebot.svg?v=1.6.1)](https://www.npmjs.com/package/@uhd_kr%2Fcodebot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Status: BETA](https://img.shields.io/badge/Status-BETA-orange.svg)](https://github.com/hwanyong/codebot)
+
+> **⚠️ 베타 버전**: 이 패키지는 현재 활발히 개발 중입니다. 기능이 변경될 수 있으며, 버그가 존재할 수 있습니다. 프로덕션 환경에서는 자체 책임 하에 사용하세요.
 
 AI 기반 코딩 어시스턴트 CLI 도구입니다. LangGraph를 사용하여 복잡한 코딩 작업을 수행할 수 있는 다단계 추론 에이전트를 구현했습니다.
 
