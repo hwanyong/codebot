@@ -1,5 +1,5 @@
 {
-  "name": "codebot",
+  "name": "@uhd_kr/codebot",
   "version": "1.0.0",
   "description": "AI 기반 코딩 어시스턴트 CLI",
   "type": "module",
