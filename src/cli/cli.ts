@@ -54,3 +54,22 @@ if (!isGloballyInstalled()) {
 // Create and run the CLI program
 const program = createCLI();
 program.parse(process.argv);
+
+// 프로세스가 종료되지 않도록 이벤트 루프를 유지
+// chat 명령어가 실행된 경우에만 적용
+if (process.argv.includes('chat')) {
+  // 이벤트 루프를 유지하기 위한 간단한 타이머
+  // 이 타이머는 실제로 아무 작업도 수행하지 않지만, 이벤트 루프를 계속 유지함
+  const keepAliveTimer = setInterval(() => {
+    // 아무 작업도 하지 않음
+  }, 60000); // 60초마다 실행
+
+  // 타이머 참조를 유지하여 가비지 컬렉션되지 않도록 함
+  // keepAliveTimer.unref(); // 이 줄을 제거 - 타이머가 프로세스 종료를 방해하도록 함
+
+  // SIGINT(Ctrl+C) 이벤트를 처리하여 정상적으로 종료
+  process.on('SIGINT', () => {
+    clearInterval(keepAliveTimer);
+    process.exit(0);
+  });
+}

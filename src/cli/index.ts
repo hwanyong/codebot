@@ -39,63 +39,71 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
   // 에이전트 관리자 생성
   const agentManager = new AgentManager(options);
 
-  // 읽기/쓰기 인터페이스 생성
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: chalk.green('> ')
-  });
+  // Promise를 반환하여 readline 인터페이스가 닫힐 때까지 완료되지 않도록 함
+  return new Promise<void>((resolve) => {
+    // 읽기/쓰기 인터페이스 생성
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      prompt: chalk.green('> ')
+    });
 
-  console.log(chalk.magenta(i18n.t('welcome')));
-  console.log(chalk.gray(i18n.t('current_directory', process.cwd())));
-
-  rl.prompt();
-
-  rl.on('line', async (line) => {
-    // 슬래시 명령어 처리
-    if (line.startsWith('/')) {
-      await handleSlashCommand(line, rl);
-      return;
-    }
-
-    // 빈 입력 처리
-    if (line.trim() === '') {
-      rl.prompt();
-      return;
-    }
-
-    // 로딩 스피너 표시
-    const spinner = ora(i18n.t('thinking')).start();
-
-    try {
-      // 에이전트 실행
-      const response = await agentManager.run(line);
-
-      // 스피너 중지 및 응답 표시
-      spinner.stop();
-      console.log(chalk.blue('Codebot: ') + response);
-    } catch (error: any) {
-      // 오류 처리
-      spinner.fail(i18n.t('error_occurred'));
-      console.error(chalk.red(i18n.t('error_message', error.message)));
-
-      // 디버그 모드에서는 상세 오류 정보 표시
-      if (process.env.DEBUG) {
-        console.error(error);
-      }
-
-      // 오류 발생 후에도 세션 유지
-      console.log(chalk.yellow(i18n.t('session_continued')));
-    }
+    console.log(chalk.magenta(i18n.t('welcome')));
+    console.log(chalk.gray(i18n.t('current_directory', process.cwd())));
 
     rl.prompt();
-  });
 
-  // readline 인터페이스가 닫힐 때 이벤트 처리
-  rl.on('close', () => {
-    console.log(chalk.green(i18n.t('goodbye')));
-    // 프로세스 종료 방지
-    // process.exit(0); // 이 줄을 제거하거나 주석 처리
+    rl.on('line', async (line) => {
+      // 슬래시 명령어 처리
+      if (line.startsWith('/')) {
+        await handleSlashCommand(line, rl);
+        return;
+      }
+
+      // 빈 입력 처리
+      if (line.trim() === '') {
+        rl.prompt();
+        return;
+      }
+
+      // 로딩 스피너 표시
+      const spinner = ora(i18n.t('thinking')).start();
+
+      try {
+        // 에이전트 실행
+        const response = await agentManager.run(line);
+
+        // 스피너 중지 및 응답 표시
+        spinner.stop();
+        console.log(chalk.blue('Codebot: ') + response);
+      } catch (error: any) {
+        // 오류 처리
+        spinner.fail(i18n.t('error_occurred'));
+        console.error(chalk.red(i18n.t('error_message', error.message)));
+
+        // 디버그 모드에서는 상세 오류 정보 표시
+        if (process.env.DEBUG) {
+          console.error(error);
+        }
+
+        // 오류 발생 후에도 세션 유지
+        console.log(chalk.yellow(i18n.t('session_continued')));
+      }
+
+      rl.prompt();
+    });
+
+    // readline 인터페이스가 닫힐 때 이벤트 처리
+    rl.on('close', () => {
+      console.log(chalk.green(i18n.t('goodbye')));
+      // Promise 해결
+      resolve();
+    });
+
+    // SIGINT(Ctrl+C) 이벤트를 처리하여 정상적으로 종료
+    process.on('SIGINT', () => {
+      rl.close();
+    });
   });
 }
 
@@ -226,34 +234,56 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
         return; // 여기서 함수 종료
       }
 
-      try {
-        console.log(chalk.cyan(`${i18n.t('executing_command')}:`), args);
+      console.log(chalk.cyan(`${i18n.t('executing_command')}:`), args);
 
-        const spinner = ora(i18n.t('executing')).start();
+      // 스피너 생성 (아직 시작하지 않음)
+      let spinner = ora({
+        text: i18n.t('executing'),
+        color: 'yellow'
+      });
 
-        const { stdout, stderr } = await execPromise(args);
+      // 스피너 시작
+      spinner.start();
 
-        spinner.stop();
+      // 명령어 실행 - await를 사용하여 Promise가 완료될 때까지 기다림
+      await new Promise<void>((resolve) => {
+        execPromise(args)
+          .then(({ stdout, stderr }) => {
+            // 성공적으로 실행 완료
+            spinner.stop(); // 스피너 중지
 
-        if (stdout) console.log(stdout);
-        if (stderr) console.error(chalk.yellow(stderr));
-        console.log(chalk.green(i18n.t('command_completed')));
+            if (stdout) console.log(stdout);
+            if (stderr) console.error(chalk.yellow(stderr));
+            console.log(chalk.green(i18n.t('command_completed')));
+          })
+          .catch((error) => {
+            // 명령어 실행 중 오류 발생
+            spinner.stop(); // 스피너 중지
 
-        // 명령어 처리 완료 후 프롬프트 표시
-        rl.prompt();
-      } catch (error: any) {
-        console.error(chalk.red(`${i18n.t('command_error')}:`));
-        if (error.stdout) console.log(error.stdout);
-        if (error.stderr) console.error(chalk.red(error.stderr));
+            console.error(chalk.red(`${i18n.t('command_error')}:`));
+            if (error.stdout) console.log(error.stdout);
+            if (error.stderr) console.error(chalk.red(error.stderr));
+          })
+          .finally(() => {
+            // 성공이든 실패든 항상 실행
+            // 혹시 모를 상황을 대비해 스피너가 아직 돌고 있다면 중지
+            if (spinner.isSpinning) {
+              spinner.stop();
+            }
 
-        // 오류 발생 시에도 프롬프트 표시
-        rl.prompt();
-      }
+            // 프롬프트 표시
+            rl.prompt();
+
+            // Promise 해결
+            resolve();
+          });
+      });
+
       return; // 여기서 함수 종료하여 아래의 rl.prompt() 호출 방지
 
     case 'exit':
+      console.log(chalk.green(i18n.t('goodbye')));
       rl.close();
-      process.exit(0);
       break;
 
     default:
@@ -437,7 +467,31 @@ export function createCLI(): Command {
       // 마지막 사용 정보 저장
       configManager.setLastUsed(provider, model);
 
-      await safeExecute(() => startInteractiveSession(agentOptions));
+      try {
+        // 대화형 세션 시작
+        await startInteractiveSession(agentOptions);
+
+        // 이 코드는 startInteractiveSession이 완료된 후에만 실행됨
+        // 하지만 startInteractiveSession은 readline 인터페이스가 닫힐 때까지 완료되지 않음
+        // 따라서 이 코드는 실행되지 않을 것임
+      } catch (error: any) {
+        if (error.code === 'ECONNREFUSED') {
+          console.error(chalk.red('AI 서비스에 연결할 수 없습니다. 네트워크 연결을 확인하세요.'));
+        } else if (error.code === 'EAUTHORIZATION') {
+          console.error(chalk.red('인증에 실패했습니다. API 키를 확인하세요.'));
+        } else {
+          console.error(chalk.red(i18n.t('error_message', error.message)));
+          if (process.env.DEBUG) {
+            console.error(error);
+          }
+        }
+      }
+
+      // 프로세스가 종료되지 않도록 무한 대기
+      // 이 코드는 실행되지 않을 것이지만, 혹시 startInteractiveSession이 완료된 경우를 대비
+      await new Promise<void>(() => {
+        // 이 Promise는 의도적으로 해결되지 않음
+      });
     });
 
   program
@@ -479,11 +533,27 @@ export function createCLI(): Command {
       // 로딩 스피너 표시
       const spinner = ora(i18n.t('thinking')).start();
 
-      await safeExecute(async () => {
+      try {
         const response = await agentManager.run(task);
         spinner.stop();
         console.log(response);
-      });
+      } catch (error: any) {
+        spinner.stop();
+
+        if (error.code === 'ECONNREFUSED') {
+          console.error(chalk.red('AI 서비스에 연결할 수 없습니다. 네트워크 연결을 확인하세요.'));
+        } else if (error.code === 'EAUTHORIZATION') {
+          console.error(chalk.red('인증에 실패했습니다. API 키를 확인하세요.'));
+        } else {
+          console.error(chalk.red(i18n.t('error_message', error.message)));
+          if (process.env.DEBUG) {
+            console.error(error);
+          }
+        }
+
+        // run 명령어에서는 오류 발생 시 종료
+        process.exit(1);
+      }
     });
 
   program

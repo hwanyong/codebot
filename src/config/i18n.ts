@@ -142,6 +142,10 @@ export const cliMessages: I18nMessages = {
     ko: '오류: {0}',
     en: 'Error: {0}'
   },
+  'unexpected_error': {
+    ko: '예상치 못한 오류가 발생했습니다',
+    en: 'An unexpected error occurred'
+  },
   'session_continued': {
     ko: '세션이 계속됩니다. 새 명령을 입력하세요.',
     en: 'Session continues. Enter a new command.'
