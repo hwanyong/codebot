@@ -1,7 +1,7 @@
 {
   "name": "@uhd_kr/codebot",
-  "version": "1.0.0",
-  "description": "AI 기반 코딩 어시스턴트 CLI",
+  "version": "1.0.2",
+  "description": "AI-based coding assistant CLI tool",
   "type": "module",
   "bin": {
     "codebot": "dist/cli/cli.js"
@@ -12,7 +12,8 @@
     "dev": "ts-node --esm src/cli/cli.ts",
     "lint": "eslint src/**/*.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "release": "npm publish --access public"
+    "release": "npm publish --access public",
+    "postinstall": "node scripts/check-global.js"
   },
   "dependencies": {
     "@langchain/core": "^0.3.37",
@@ -55,5 +56,6 @@
   "homepage": "https://github.com/hwanyong/codebot#readme",
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "preferGlobal": true
 }
