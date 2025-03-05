@@ -8,12 +8,12 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "node --no-deprecation dist/cli/cli.js",
+    "start": "node dist/cli/cli.js",
     "dev": "ts-node --esm src/cli/cli.ts",
     "lint": "eslint src/**/*.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "release": "npm publish --access public",
-    "postinstall": "node --no-deprecation scripts/check-global.mjs"
+    "release": "NODE_ENV=production npm publish --access public",
+    "postinstall": "node scripts/check-global.mjs"
   },
   "dependencies": {
     "@langchain/anthropic": "^0.1.1",

@@ -1,8 +1,27 @@
 #!/usr/bin/env node
 
-// 경고 메시지 숨기기
-// @ts-ignore: Node.js 런타임 속성이지만 TypeScript 타입에 정의되지 않음
-process.noDeprecation = true;
+// 배포 환경 감지
+const isProduction = process.env.NODE_ENV === 'production' ||
+                     // npm이 배포 과정에서 설정하는 환경 변수 확인
+                     process.env.npm_lifecycle_event === 'postinstall' ||
+                     // 전역 설치 여부로 배포 환경 추정
+                     !process.argv[1].includes('node_modules/.bin');
+
+// 배포 환경에서만 경고 메시지 무시
+if (isProduction) {
+  process.on('warning', (warning) => {
+    // punycode 관련 경고만 무시
+    if (warning.name === 'DeprecationWarning' && warning.message.includes('punycode')) {
+      return;
+    }
+    // 다른 경고는 정상적으로 출력
+    console.warn(warning.name);
+    console.warn(warning.message);
+    console.warn(warning.stack);
+  });
+}
+
+// 참고: 개발 환경에서는 경고가 표시되고, 배포 환경에서만 경고가 숨겨집니다.
 
 import { createCLI } from './index.js';
 import path from 'path';
