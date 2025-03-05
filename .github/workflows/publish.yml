@@ -1,0 +1,144 @@
+name: Publish Package
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+  issues: write
+  actions: write
+  statuses: write
+  checks: write
+  deployments: write
+  id-token: write
+  discussions: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: codebot-publish
+    steps:
+      # 1) 먼저 코드 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # (디버깅) 환경변수 확인
+      - name: Verify environment variables
+        run: |
+          # Check if NPM_TOKEN is defined
+          if [ -n "$NPM_TOKEN" ]; then
+            # NPM_TOKEN is defined; now check if its value is empty
+            if [ -z "$NPM_TOKEN" ]; then
+              echo "NPM_TOKEN is defined but empty."
+            else
+              echo "NPM_TOKEN is defined and has a value."
+            fi
+          else
+            echo "NPM_TOKEN is not defined at all."
+          fi
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify NPM_TOKEN is set
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "NPM_TOKEN is empty"
+            exit 1
+          else
+            echo "NPM_TOKEN is set, length: ${#NPM_TOKEN}"
+          fi
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify NODE_AUTH_TOKEN is set
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NODE_AUTH_TOKEN is empty"
+            exit 1
+          else
+            echo "NODE_AUTH_TOKEN is set"
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 2) .npmrc가 레포에 있다면 우선 삭제
+      - name: Remove existing .npmrc if exists
+        run: rm -f .npmrc
+
+      # 3) npm 인증 토큰 설정
+      - name: Configure npmrc in $HOME
+        run: |
+          echo "registry=https://registry.npmjs.org/" > $HOME/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> $HOME/.npmrc
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # (디버깅) 현재 디렉토리 파일 목록 확인
+      - name: List files in project root
+        run: ls -la
+
+      # (디버깅) .npmrc 내용을 확인하되, 토큰은 마스킹
+      - name: Display .npmrc content with masked token (debug)
+        run: cat $HOME/.npmrc | sed -E 's/(\/\/registry\.npmjs\.org\/:_authToken=).*/\1***hidden***/'
+
+      # 5) GitHub Packages를 쓰는 경우(필요 없다면 제거 가능)
+      - name: Setup Node.js for GitHub
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@hwanyong'
+
+      # 6) pnpm 설치
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          run_install: false
+
+      # 7) pnpm 캐시 디렉토리 추출
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      # 8) pnpm 캐시 설정
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      # 9) 의존성 설치
+      - name: Install dependencies
+        run: pnpm install
+
+      # 10) 빌드
+      - name: Build
+        run: pnpm build
+
+      # 실행 파일에 실행 권한 부여
+      - name: Add executable permissions to CLI file
+        run: chmod +x dist/cli/cli.js
+
+      # 11) npmjs.org 레지스트리 사용을 위한 Node 설정
+      - name: Setup Node.js for NPM
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      # 12) npm에 배포
+      - name: Publish to npm
+        run: pnpm run release
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
