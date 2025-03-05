@@ -8,6 +8,12 @@ import { ConfigManager, ConfigWizard } from '../config/index.js';
 import { I18n } from '../config/i18n.js';
 import fs from 'fs';
 import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import os from 'os';
+
+// exec를 Promise로 변환
+const execPromise = promisify(exec);
 
 // 환경 변수 로드
 dotenv.config();
@@ -84,7 +90,10 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
  * @param rl 읽기/쓰기 인터페이스
  */
 async function handleSlashCommand(line: string, rl: readline.Interface): Promise<void> {
-  const command = line.slice(1).trim();
+  const commandLine = line.slice(1).trim();
+  const parts = commandLine.split(' ');
+  const command = parts[0];
+  const args = parts.slice(1).join(' ');
 
   switch (command) {
     case 'help':
@@ -92,6 +101,8 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
       console.log(i18n.t('help_command'));
       console.log(i18n.t('clear_command'));
       console.log(i18n.t('config_command'));
+      console.log(i18n.t('info_command'));
+      console.log(i18n.t('exec_command'));
       console.log(i18n.t('exit_command'));
       break;
 
@@ -133,6 +144,85 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
         }
       });
       return;
+
+    case 'info':
+      try {
+        const spinner = ora(i18n.t('loading')).start();
+        const info = await getProjectInfo();
+        spinner.stop();
+
+        console.log(chalk.bold(i18n.t('project_info')));
+        console.log(chalk.cyan(`${i18n.t('working_directory')}:`), info.workingDirectory);
+
+        if (info.project) {
+          console.log(chalk.cyan(`${i18n.t('project_name')}:`), info.project.name || '이름 없음');
+          if (info.project.version) console.log(chalk.cyan(`${i18n.t('project_version')}:`), info.project.version);
+          if (info.project.description) console.log(chalk.cyan(`${i18n.t('project_description')}:`), info.project.description);
+          if (info.projectType) console.log(chalk.cyan(`${i18n.t('project_type')}:`), info.projectType);
+          console.log(
+            chalk.cyan(`${i18n.t('dependencies')}:`),
+            i18n.t('dependencies_count', info.project.dependencies || 0, info.project.devDependencies || 0)
+          );
+        } else {
+          console.log(chalk.yellow(i18n.t('no_package_json')));
+        }
+
+        if (info.typescript) {
+          console.log(chalk.cyan(`${i18n.t('typescript')}:`), i18n.t('typescript_in_use'));
+          if (info.typescriptConfig) {
+            const tsConfig = info.typescriptConfig;
+            console.log(
+              chalk.cyan(`   ${i18n.t('typescript_target')}:`),
+              tsConfig.target || i18n.t('default_value')
+            );
+            console.log(
+              chalk.cyan(`   ${i18n.t('typescript_module')}:`),
+              tsConfig.module || i18n.t('default_value')
+            );
+            console.log(
+              chalk.cyan(`   ${i18n.t('typescript_strict')}:`),
+              tsConfig.strict !== undefined ? tsConfig.strict : i18n.t('default_value')
+            );
+          }
+        }
+
+        if (info.git) {
+          console.log(chalk.cyan(`${i18n.t('git_branch')}:`), info.git.branch);
+          console.log(chalk.cyan(`${i18n.t('git_commit')}:`), info.git.commit.substring(0, 7));
+        }
+
+        console.log(chalk.cyan(`${i18n.t('os_info')}:`), `${info.os.platform} ${info.os.release} (${info.os.arch})`);
+        console.log(chalk.cyan(`${i18n.t('nodejs_version')}:`), info.node.version);
+        console.log(chalk.cyan(`${i18n.t('environment')}:`), info.node.env);
+      } catch (error) {
+        console.error(chalk.red(`${i18n.t('info_error')}:`), error);
+      }
+      break;
+
+    case 'exec':
+      if (!args) {
+        console.log(chalk.yellow(i18n.t('exec_usage')));
+        break;
+      }
+
+      try {
+        console.log(chalk.cyan(`${i18n.t('executing_command')}:`), args);
+
+        const spinner = ora(i18n.t('executing')).start();
+
+        const { stdout, stderr } = await execPromise(args);
+
+        spinner.stop();
+
+        if (stdout) console.log(stdout);
+        if (stderr) console.error(chalk.yellow(stderr));
+        console.log(chalk.green(i18n.t('command_completed')));
+      } catch (error: any) {
+        console.error(chalk.red(`${i18n.t('command_error')}:`));
+        if (error.stdout) console.log(error.stdout);
+        if (error.stderr) console.error(chalk.red(error.stderr));
+      }
+      break;
 
     case 'exit':
       rl.close();
@@ -186,6 +276,85 @@ async function ensureConfig(): Promise<void> {
 
   // 환경 변수 로드
   configManager.loadEnv();
+}
+
+/**
+ * 프로젝트 정보를 가져옵니다.
+ */
+async function getProjectInfo(): Promise<Record<string, any>> {
+  const cwd = process.cwd();
+  const info: Record<string, any> = {
+    workingDirectory: cwd,
+    os: {
+      platform: process.platform,
+      release: os.release(),
+      arch: process.arch
+    },
+    node: {
+      version: process.version,
+      env: process.env.NODE_ENV || 'development'
+    }
+  };
+
+  // package.json 확인
+  const packageJsonPath = path.join(cwd, 'package.json');
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      info.project = {
+        name: packageJson.name,
+        version: packageJson.version,
+        description: packageJson.description,
+        type: packageJson.type,
+        dependencies: Object.keys(packageJson.dependencies || {}).length,
+        devDependencies: Object.keys(packageJson.devDependencies || {}).length
+      };
+
+      // 프로젝트 타입 감지
+      if (packageJson.dependencies) {
+        if (packageJson.dependencies.react) info.projectType = 'React';
+        if (packageJson.dependencies.vue) info.projectType = 'Vue';
+        if (packageJson.dependencies.angular) info.projectType = 'Angular';
+        if (packageJson.dependencies.next) info.projectType = 'Next.js';
+        if (packageJson.dependencies.nuxt) info.projectType = 'Nuxt.js';
+        if (packageJson.dependencies.express) info.projectType = 'Express';
+        if (packageJson.dependencies.koa) info.projectType = 'Koa';
+        if (packageJson.dependencies.fastify) info.projectType = 'Fastify';
+      }
+    } catch (error) {
+      info.packageJsonError = 'package.json을 파싱할 수 없습니다.';
+    }
+  }
+
+  // tsconfig.json 확인
+  const tsconfigPath = path.join(cwd, 'tsconfig.json');
+  if (fs.existsSync(tsconfigPath)) {
+    info.typescript = true;
+    try {
+      const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf8'));
+      info.typescriptConfig = {
+        target: tsconfig.compilerOptions?.target,
+        module: tsconfig.compilerOptions?.module,
+        strict: tsconfig.compilerOptions?.strict
+      };
+    } catch (error) {
+      info.tsconfigError = 'tsconfig.json을 파싱할 수 없습니다.';
+    }
+  }
+
+  // Git 정보 확인
+  try {
+    const { stdout: gitBranch } = await execPromise('git rev-parse --abbrev-ref HEAD');
+    const { stdout: gitCommit } = await execPromise('git rev-parse HEAD');
+    info.git = {
+      branch: gitBranch.trim(),
+      commit: gitCommit.trim()
+    };
+  } catch (error) {
+    // Git 정보를 가져올 수 없는 경우 무시
+  }
+
+  return info;
 }
 
 /**
@@ -287,6 +456,92 @@ export function createCLI(): Command {
     .action(async () => {
       const wizard = new ConfigWizard();
       await wizard.start();
+    });
+
+  program
+    .command('info')
+    .description(i18n.t('cmd_info_desc'))
+    .action(async () => {
+      try {
+        const spinner = ora(i18n.t('loading')).start();
+        const info = await getProjectInfo();
+        spinner.stop();
+
+        console.log(chalk.bold(i18n.t('project_info')));
+        console.log(chalk.cyan(`${i18n.t('working_directory')}:`), info.workingDirectory);
+
+        if (info.project) {
+          console.log(chalk.cyan(`${i18n.t('project_name')}:`), info.project.name || '이름 없음');
+          if (info.project.version) console.log(chalk.cyan(`${i18n.t('project_version')}:`), info.project.version);
+          if (info.project.description) console.log(chalk.cyan(`${i18n.t('project_description')}:`), info.project.description);
+          if (info.projectType) console.log(chalk.cyan(`${i18n.t('project_type')}:`), info.projectType);
+          console.log(
+            chalk.cyan(`${i18n.t('dependencies')}:`),
+            i18n.t('dependencies_count', info.project.dependencies || 0, info.project.devDependencies || 0)
+          );
+        } else {
+          console.log(chalk.yellow(i18n.t('no_package_json')));
+        }
+
+        if (info.typescript) {
+          console.log(chalk.cyan(`${i18n.t('typescript')}:`), i18n.t('typescript_in_use'));
+          if (info.typescriptConfig) {
+            const tsConfig = info.typescriptConfig;
+            console.log(
+              chalk.cyan(`   ${i18n.t('typescript_target')}:`),
+              tsConfig.target || i18n.t('default_value')
+            );
+            console.log(
+              chalk.cyan(`   ${i18n.t('typescript_module')}:`),
+              tsConfig.module || i18n.t('default_value')
+            );
+            console.log(
+              chalk.cyan(`   ${i18n.t('typescript_strict')}:`),
+              tsConfig.strict !== undefined ? tsConfig.strict : i18n.t('default_value')
+            );
+          }
+        }
+
+        if (info.git) {
+          console.log(chalk.cyan(`${i18n.t('git_branch')}:`), info.git.branch);
+          console.log(chalk.cyan(`${i18n.t('git_commit')}:`), info.git.commit.substring(0, 7));
+        }
+
+        console.log(chalk.cyan(`${i18n.t('os_info')}:`), `${info.os.platform} ${info.os.release} (${info.os.arch})`);
+        console.log(chalk.cyan(`${i18n.t('nodejs_version')}:`), info.node.version);
+        console.log(chalk.cyan(`${i18n.t('environment')}:`), info.node.env);
+      } catch (error) {
+        console.error(chalk.red(`${i18n.t('info_error')}:`), error);
+      }
+    });
+
+  program
+    .command('exec')
+    .description(i18n.t('cmd_exec_desc'))
+    .argument('<command>', i18n.t('cmd_exec_arg'))
+    .option('-s, --silent', i18n.t('cmd_exec_silent'))
+    .action(async (command, options) => {
+      try {
+        if (!options.silent) {
+          console.log(chalk.cyan(`${i18n.t('executing_command')}:`), command);
+        }
+
+        const spinner = options.silent ? ora().start() : ora(i18n.t('executing')).start();
+
+        const { stdout, stderr } = await execPromise(command);
+
+        spinner.stop();
+
+        if (!options.silent) {
+          if (stdout) console.log(stdout);
+          if (stderr) console.error(chalk.yellow(stderr));
+          console.log(chalk.green(i18n.t('command_completed')));
+        }
+      } catch (error: any) {
+        console.error(chalk.red(`${i18n.t('command_error')}:`));
+        if (error.stdout) console.log(error.stdout);
+        if (error.stderr) console.error(chalk.red(error.stderr));
+      }
     });
 
   // 전역 오류 처리기

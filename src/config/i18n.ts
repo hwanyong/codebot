@@ -30,6 +30,110 @@ export const cliMessages: I18nMessages = {
     ko: 'Codebot이 생각 중입니다...',
     en: 'Codebot is thinking...'
   },
+  'loading': {
+    ko: '정보를 불러오는 중입니다...',
+    en: 'Loading information...'
+  },
+  'executing': {
+    ko: '명령어를 실행 중입니다...',
+    en: 'Executing command...'
+  },
+  'project_info': {
+    ko: '📊 프로젝트 정보',
+    en: '📊 Project Information'
+  },
+  'working_directory': {
+    ko: '📂 작업 디렉토리',
+    en: '📂 Working Directory'
+  },
+  'project_name': {
+    ko: '📦 프로젝트',
+    en: '📦 Project'
+  },
+  'project_version': {
+    ko: '🔖 버전',
+    en: '🔖 Version'
+  },
+  'project_description': {
+    ko: '📝 설명',
+    en: '📝 Description'
+  },
+  'project_type': {
+    ko: '🧩 프로젝트 타입',
+    en: '🧩 Project Type'
+  },
+  'dependencies': {
+    ko: '📚 의존성',
+    en: '📚 Dependencies'
+  },
+  'dependencies_count': {
+    ko: '{0} 개의 의존성, {1} 개의 개발 의존성',
+    en: '{0} dependencies, {1} dev dependencies'
+  },
+  'no_package_json': {
+    ko: '⚠️ package.json을 찾을 수 없습니다.',
+    en: '⚠️ No package.json found.'
+  },
+  'typescript': {
+    ko: '🔷 TypeScript',
+    en: '🔷 TypeScript'
+  },
+  'typescript_in_use': {
+    ko: '사용 중',
+    en: 'in use'
+  },
+  'typescript_target': {
+    ko: 'Target',
+    en: 'Target'
+  },
+  'typescript_module': {
+    ko: 'Module',
+    en: 'Module'
+  },
+  'typescript_strict': {
+    ko: 'Strict',
+    en: 'Strict'
+  },
+  'default_value': {
+    ko: '기본값',
+    en: 'default'
+  },
+  'git_branch': {
+    ko: '🔀 Git 브랜치',
+    en: '🔀 Git Branch'
+  },
+  'git_commit': {
+    ko: '🔒 Git 커밋',
+    en: '🔒 Git Commit'
+  },
+  'os_info': {
+    ko: '🖥️ OS',
+    en: '🖥️ OS'
+  },
+  'nodejs_version': {
+    ko: '⚙️ Node.js',
+    en: '⚙️ Node.js'
+  },
+  'environment': {
+    ko: '🌐 환경',
+    en: '🌐 Environment'
+  },
+  'info_error': {
+    ko: '정보를 가져오는 중 오류가 발생했습니다',
+    en: 'Error occurred while fetching information'
+  },
+  'executing_command': {
+    ko: '🔄 실행 중',
+    en: '🔄 Executing'
+  },
+  'command_completed': {
+    ko: '✅ 명령어 실행 완료',
+    en: '✅ Command execution completed'
+  },
+  'command_error': {
+    ko: '명령어 실행 중 오류가 발생했습니다',
+    en: 'Error occurred while executing command'
+  },
   'error_occurred': {
     ko: '오류가 발생했습니다.',
     en: 'An error occurred.'
@@ -37,6 +141,22 @@ export const cliMessages: I18nMessages = {
   'error_message': {
     ko: '오류: {0}',
     en: 'Error: {0}'
+  },
+  'cmd_info_desc': {
+    ko: '현재 프로젝트 및 작업 환경 정보를 표시합니다.',
+    en: 'Display current project and environment information.'
+  },
+  'cmd_exec_desc': {
+    ko: '터미널 명령어를 실행합니다.',
+    en: 'Execute a terminal command.'
+  },
+  'cmd_exec_arg': {
+    ko: '실행할 명령어',
+    en: 'Command to execute'
+  },
+  'cmd_exec_silent': {
+    ko: '출력을 표시하지 않습니다.',
+    en: 'Do not display output.'
   },
 
   // 슬래시 명령어
@@ -58,15 +178,27 @@ export const cliMessages: I18nMessages = {
   },
   'exit_command': {
     ko: '/exit     - 대화 세션을 종료합니다.',
-    en: '/exit     - End the conversation session.'
+    en: '/exit     - Exit the conversation session.'
   },
-  'history_cleared': {
-    ko: '대화 기록이 지워졌습니다.',
-    en: 'Conversation history cleared.'
+  'info_command': {
+    ko: '/info     - 현재 프로젝트 및 작업 환경 정보를 표시합니다.',
+    en: '/info     - Display current project and environment information.'
+  },
+  'exec_command': {
+    ko: '/exec     - 터미널 명령어를 실행합니다. 예: /exec ls -la',
+    en: '/exec     - Execute a terminal command. Example: /exec ls -la'
+  },
+  'exec_usage': {
+    ko: '사용법: /exec <명령어>',
+    en: 'Usage: /exec <command>'
   },
   'unknown_command': {
     ko: '알 수 없는 명령어: {0}',
     en: 'Unknown command: {0}'
+  },
+  'history_cleared': {
+    ko: '대화 기록이 지워졌습니다.',
+    en: 'Conversation history cleared.'
   },
 
   // 설정 마법사
