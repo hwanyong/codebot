@@ -1,6 +1,6 @@
 {
   "name": "@uhd_kr/codebot",
-  "version": "1.0.2",
+  "version": "1.4.0",
   "description": "AI-based coding assistant CLI tool",
   "type": "module",
   "bin": {
@@ -16,6 +16,7 @@
     "postinstall": "node scripts/check-global.js"
   },
   "dependencies": {
+    "@langchain/anthropic": "^0.1.1",
     "@langchain/core": "^0.3.37",
     "@langchain/langgraph": "^0.2.44",
     "@langchain/ollama": "^0.1.5",

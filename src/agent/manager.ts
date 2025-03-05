@@ -1,18 +1,23 @@
 import { HumanMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { ChatOllama } from '@langchain/ollama';
+import { ChatAnthropic } from '@langchain/anthropic';
 import { codebotGraph } from './graph.js';
 import { ToolRegistry, registerTools } from '../tools/index.js';
 import { State } from './state.js';
 import dotenv from 'dotenv';
+import { ConfigManager } from '../config/index.js';
 
 // 환경 변수 로드
 dotenv.config();
 
+// 설정 관리자 인스턴스 생성
+const configManager = new ConfigManager();
+
 /**
  * 모델 제공자 타입
  */
-export type ModelProvider = 'openai' | 'ollama';
+export type ModelProvider = 'openai' | 'ollama' | 'anthropic' | 'custom';
 
 /**
  * 모델 옵션 인터페이스
@@ -60,19 +65,36 @@ export class AgentManager {
   private getModel() {
     const { provider, model, temperature = 0.7 } = this.options.model;
 
+    // 설정 로드
+    configManager.loadConfig();
+    configManager.loadEnv();
+
+    // Provider 정보 가져오기
+    const providerConfig = configManager.getProviderByName(provider) ||
+                          configManager.getAllProviders().find(p => p.type === provider);
+
     switch (provider) {
       case 'openai':
         return new ChatOpenAI({
           modelName: model,
           temperature,
-          openAIApiKey: process.env.OPENAI_API_KEY
+          openAIApiKey: process.env.OPENAI_API_KEY || providerConfig?.apiKey
         });
       case 'ollama':
         return new ChatOllama({
           model,
           temperature,
-          baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434'
+          baseUrl: process.env.OLLAMA_BASE_URL || providerConfig?.baseUrl || 'http://localhost:11434'
         });
+      case 'anthropic':
+        return new ChatAnthropic({
+          modelName: model,
+          temperature,
+          anthropicApiKey: process.env.ANTHROPIC_API_KEY || providerConfig?.apiKey
+        });
+      case 'custom':
+        // 사용자 정의 모델 지원 추가
+        throw new Error('사용자 정의 모델은 아직 지원되지 않습니다.');
       default:
         throw new Error(`지원되지 않는 모델 제공자: ${provider}`);
     }

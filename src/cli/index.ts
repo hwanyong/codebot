@@ -4,15 +4,25 @@ import readline from 'readline';
 import chalk from 'chalk';
 import ora from 'ora';
 import dotenv from 'dotenv';
+import { ConfigManager, ConfigWizard } from '../config/index.js';
+import fs from 'fs';
+import path from 'path';
 
 // 환경 변수 로드
 dotenv.config();
+
+// 설정 관리자 인스턴스 생성
+const configManager = new ConfigManager();
 
 /**
  * 대화형 세션을 시작합니다.
  * @param options 에이전트 옵션
  */
 async function startInteractiveSession(options: AgentOptions): Promise<void> {
+  // 설정 로드
+  configManager.loadConfig();
+  configManager.loadEnv();
+
   // 에이전트 관리자 생성
   const agentManager = new AgentManager(options);
 
@@ -74,6 +84,7 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
       console.log(chalk.yellow('사용 가능한 명령어:'));
       console.log('/help     - 이 도움말 메시지를 표시합니다.');
       console.log('/clear    - 대화 기록을 지웁니다.');
+      console.log('/config   - 설정 메뉴를 엽니다.');
       console.log('/exit     - 대화 세션을 종료합니다.');
       break;
 
@@ -81,6 +92,36 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
       console.clear();
       console.log(chalk.green('대화 기록이 지워졌습니다.'));
       break;
+
+    case 'config':
+      // 현재 readline 인터페이스 닫기
+      rl.close();
+
+      // 설정 마법사 실행
+      const wizard = new ConfigWizard();
+      await wizard.start();
+
+      // 설정 마법사가 완료된 후 새 readline 인터페이스 생성
+      const newRl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        prompt: chalk.green('> ')
+      });
+
+      console.log(chalk.magenta('Codebot이 준비되었습니다! 도움말을 보려면 /help를 입력하세요.'));
+      newRl.prompt();
+
+      // 이벤트 리스너 다시 설정
+      newRl.on('line', async (newLine) => {
+        if (newLine.startsWith('/')) {
+          await handleSlashCommand(newLine, newRl);
+        } else {
+          // 기존 로직 실행
+          // 여기서는 간단히 프롬프트만 표시
+          newRl.prompt();
+        }
+      });
+      return;
 
     case 'exit':
       rl.close();
@@ -118,6 +159,22 @@ async function safeExecute(callback: () => Promise<void>): Promise<void> {
 }
 
 /**
+ * 설정이 존재하는지 확인하고, 없으면 설정 마법사를 실행합니다.
+ */
+async function ensureConfig(): Promise<void> {
+  configManager.loadConfig();
+
+  if (!configManager.configExists() || configManager.getAllProviders().length === 0) {
+    console.log(chalk.yellow('Codebot 설정이 필요합니다.'));
+    const wizard = new ConfigWizard();
+    await wizard.start();
+  }
+
+  // 환경 변수 로드
+  configManager.loadEnv();
+}
+
+/**
  * CLI 프로그램을 생성합니다.
  */
 export function createCLI(): Command {
@@ -131,14 +188,25 @@ export function createCLI(): Command {
   program
     .command('chat')
     .description('Codebot과 대화 세션을 시작합니다.')
-    .option('-m, --model <name>', '사용할 AI 모델을 지정합니다.', 'gpt-4')
-    .option('-p, --provider <name>', '사용할 모델 제공자를 지정합니다.', 'openai')
+    .option('-m, --model <n>', '사용할 AI 모델을 지정합니다.')
+    .option('-p, --provider <n>', '사용할 모델 제공자를 지정합니다.')
     .option('-t, --temperature <number>', '모델 온도를 지정합니다.', '0.7')
     .option('-v, --verbose', '상세 로깅을 활성화합니다.')
     .action(async (options) => {
+      // 설정 확인
+      await ensureConfig();
+
+      // 기본 Provider 가져오기
+      const defaultProvider = configManager.getDefaultProvider();
+      const lastUsed = configManager.getLastUsed();
+
+      // Provider 및 모델 설정
+      const provider = options.provider || defaultProvider?.type || 'openai';
+      const model = options.model || lastUsed?.model || defaultProvider?.models?.[0] || 'gpt-4';
+
       const modelOptions: ModelOptions = {
-        provider: options.provider as any,
-        model: options.model,
+        provider: provider as any,
+        model: model,
         temperature: parseFloat(options.temperature)
       };
 
@@ -146,6 +214,9 @@ export function createCLI(): Command {
         model: modelOptions,
         verbose: options.verbose
       };
+
+      // 마지막 사용 정보 저장
+      configManager.setLastUsed(provider, model);
 
       await safeExecute(() => startInteractiveSession(agentOptions));
     });
@@ -154,14 +225,25 @@ export function createCLI(): Command {
     .command('run')
     .description('특정 작업으로 Codebot을 실행합니다.')
     .argument('<task>', '수행할 작업')
-    .option('-m, --model <name>', '사용할 AI 모델을 지정합니다.', 'gpt-4')
-    .option('-p, --provider <name>', '사용할 모델 제공자를 지정합니다.', 'openai')
+    .option('-m, --model <n>', '사용할 AI 모델을 지정합니다.')
+    .option('-p, --provider <n>', '사용할 모델 제공자를 지정합니다.')
     .option('-t, --temperature <number>', '모델 온도를 지정합니다.', '0.7')
     .option('-v, --verbose', '상세 로깅을 활성화합니다.')
     .action(async (task, options) => {
+      // 설정 확인
+      await ensureConfig();
+
+      // 기본 Provider 가져오기
+      const defaultProvider = configManager.getDefaultProvider();
+      const lastUsed = configManager.getLastUsed();
+
+      // Provider 및 모델 설정
+      const provider = options.provider || defaultProvider?.type || 'openai';
+      const model = options.model || lastUsed?.model || defaultProvider?.models?.[0] || 'gpt-4';
+
       const modelOptions: ModelOptions = {
-        provider: options.provider as any,
-        model: options.model,
+        provider: provider as any,
+        model: model,
         temperature: parseFloat(options.temperature)
       };
 
@@ -169,6 +251,9 @@ export function createCLI(): Command {
         model: modelOptions,
         verbose: options.verbose
       };
+
+      // 마지막 사용 정보 저장
+      configManager.setLastUsed(provider, model);
 
       const agentManager = new AgentManager(agentOptions);
 
@@ -180,6 +265,14 @@ export function createCLI(): Command {
         spinner.stop();
         console.log(response);
       });
+    });
+
+  program
+    .command('config')
+    .description('Codebot 설정을 관리합니다.')
+    .action(async () => {
+      const wizard = new ConfigWizard();
+      await wizard.start();
     });
 
   // 전역 오류 처리기
