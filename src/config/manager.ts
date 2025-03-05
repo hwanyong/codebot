@@ -4,6 +4,7 @@ import { getConfigDir, getConfigFilePath, getEnvFilePath } from './paths.js';
 import readline from 'readline';
 import chalk from 'chalk';
 import dotenv from 'dotenv';
+import { Language } from './i18n.js';
 
 /**
  * Provider 타입
@@ -23,6 +24,7 @@ export type Provider = {
 export interface Config {
   providers: Provider[];
   defaultProvider?: string;
+  language: Language;
   lastUsed?: {
     provider: string;
     model: string;
@@ -34,7 +36,8 @@ export interface Config {
  */
 const DEFAULT_CONFIG: Config = {
   providers: [],
-  defaultProvider: undefined
+  defaultProvider: undefined,
+  language: 'ko' // 기본 언어는 한국어
 };
 
 /**
@@ -81,6 +84,11 @@ export class ConfigManager {
       if (this.configExists()) {
         const configData = fs.readFileSync(this.configFilePath, 'utf-8');
         this.config = JSON.parse(configData);
+
+        // 이전 버전 호환성을 위해 language 필드가 없으면 추가
+        if (!this.config.language) {
+          this.config.language = 'ko';
+        }
       }
       return this.config;
     } catch (error) {
@@ -262,5 +270,20 @@ export class ConfigManager {
    */
   public getProviderByName(name: string): Provider | undefined {
     return this.config.providers.find(p => p.name === name);
+  }
+
+  /**
+   * 언어를 설정합니다.
+   */
+  public setLanguage(language: Language): void {
+    this.config.language = language;
+    this.saveConfig();
+  }
+
+  /**
+   * 현재 언어를 가져옵니다.
+   */
+  public getLanguage(): Language {
+    return this.config.language || 'ko';
   }
 }

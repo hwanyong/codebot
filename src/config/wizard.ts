@@ -1,6 +1,7 @@
 import readline from 'readline';
 import chalk from 'chalk';
 import { ConfigManager, Provider } from './manager.js';
+import { I18n, Language } from './i18n.js';
 
 /**
  * 설정 마법사 클래스
@@ -8,6 +9,7 @@ import { ConfigManager, Provider } from './manager.js';
 export class ConfigWizard {
   private rl: readline.Interface;
   private configManager: ConfigManager;
+  private i18n: I18n;
 
   /**
    * 설정 마법사 생성자
@@ -18,6 +20,11 @@ export class ConfigWizard {
       output: process.stdout
     });
     this.configManager = new ConfigManager();
+    this.i18n = I18n.getInstance();
+
+    // 설정에서 언어 로드
+    this.configManager.loadConfig();
+    this.i18n.setLanguage(this.configManager.getLanguage());
   }
 
   /**
@@ -35,8 +42,8 @@ export class ConfigWizard {
    * 설정 마법사를 시작합니다.
    */
   public async start(): Promise<void> {
-    console.log(chalk.cyan('=== Codebot 설정 마법사 ==='));
-    console.log(chalk.gray('Codebot을 사용하기 위한 설정을 진행합니다.'));
+    console.log(chalk.cyan(this.i18n.t('settings_wizard_title')));
+    console.log(chalk.gray(this.i18n.t('settings_wizard_intro')));
     console.log();
 
     // 설정 파일 로드
@@ -47,9 +54,15 @@ export class ConfigWizard {
       await this.showMainMenu();
     } else {
       // 설정 파일이 없는 경우 초기 설정 진행
-      console.log(chalk.yellow('초기 설정을 진행합니다.'));
+      console.log(chalk.yellow(this.i18n.t('initial_setup')));
+
+      // 언어 설정 먼저 진행
+      await this.changeLanguageWizard();
+
+      // Provider 추가
       await this.addProviderWizard();
-      console.log(chalk.green('초기 설정이 완료되었습니다!'));
+
+      console.log(chalk.green(this.i18n.t('setup_complete')));
       this.rl.close();
     }
   }
@@ -58,15 +71,16 @@ export class ConfigWizard {
    * 메인 메뉴를 표시합니다.
    */
   private async showMainMenu(): Promise<void> {
-    console.log(chalk.cyan('=== Codebot 설정 메뉴 ==='));
-    console.log('1. Provider 목록 보기');
-    console.log('2. Provider 추가하기');
-    console.log('3. Provider 제거하기');
-    console.log('4. 기본 Provider 변경하기');
-    console.log('5. 종료하기');
+    console.log(chalk.cyan(this.i18n.t('settings_menu_title')));
+    console.log(this.i18n.t('menu_list_providers'));
+    console.log(this.i18n.t('menu_add_provider'));
+    console.log(this.i18n.t('menu_remove_provider'));
+    console.log(this.i18n.t('menu_change_default'));
+    console.log(this.i18n.t('menu_language'));
+    console.log(this.i18n.t('menu_exit'));
     console.log();
 
-    const answer = await this.question(chalk.green('원하는 작업을 선택하세요 (1-5): '));
+    const answer = await this.question(chalk.green(this.i18n.t('select_option')));
 
     switch (answer.trim()) {
       case '1':
@@ -86,11 +100,15 @@ export class ConfigWizard {
         await this.showMainMenu();
         break;
       case '5':
-        console.log(chalk.green('설정을 종료합니다.'));
+        await this.changeLanguageWizard();
+        await this.showMainMenu();
+        break;
+      case '6':
+        console.log(chalk.green(this.i18n.t('exit_settings')));
         this.rl.close();
         break;
       default:
-        console.log(chalk.red('잘못된 선택입니다. 다시 시도하세요.'));
+        console.log(chalk.red(this.i18n.t('invalid_selection')));
         await this.showMainMenu();
         break;
     }
@@ -103,45 +121,45 @@ export class ConfigWizard {
     const providers = this.configManager.getAllProviders();
     const defaultProvider = this.configManager.getDefaultProvider();
 
-    console.log(chalk.cyan('=== Provider 목록 ==='));
+    console.log(chalk.cyan(this.i18n.t('provider_list_title')));
 
     if (providers.length === 0) {
-      console.log(chalk.yellow('등록된 Provider가 없습니다.'));
+      console.log(chalk.yellow(this.i18n.t('no_providers')));
     } else {
       providers.forEach((provider, index) => {
         const isDefault = provider.name === defaultProvider?.name;
-        const defaultMark = isDefault ? chalk.green(' (기본값)') : '';
+        const defaultMark = isDefault ? chalk.green(this.i18n.t('default_mark')) : '';
 
         console.log(`${index + 1}. ${provider.name} - ${provider.type}${defaultMark}`);
 
         if (provider.baseUrl) {
-          console.log(`   Base URL: ${provider.baseUrl}`);
+          console.log(this.i18n.t('base_url', provider.baseUrl));
         }
 
         if (provider.models && provider.models.length > 0) {
-          console.log(`   Models: ${provider.models.join(', ')}`);
+          console.log(this.i18n.t('models', provider.models.join(', ')));
         }
 
         console.log();
       });
     }
 
-    await this.question(chalk.gray('계속하려면 Enter 키를 누르세요...'));
+    await this.question(chalk.gray(this.i18n.t('press_enter')));
   }
 
   /**
    * Provider 추가 마법사를 실행합니다.
    */
   private async addProviderWizard(): Promise<void> {
-    console.log(chalk.cyan('=== Provider 추가 ==='));
-    console.log('지원되는 Provider 유형:');
-    console.log('1. OpenAI');
-    console.log('2. Ollama');
-    console.log('3. Anthropic');
-    console.log('4. 사용자 정의');
+    console.log(chalk.cyan(this.i18n.t('add_provider_title')));
+    console.log(this.i18n.t('supported_providers'));
+    console.log(this.i18n.t('provider_openai'));
+    console.log(this.i18n.t('provider_ollama'));
+    console.log(this.i18n.t('provider_anthropic'));
+    console.log(this.i18n.t('provider_custom'));
     console.log();
 
-    const typeAnswer = await this.question(chalk.green('Provider 유형을 선택하세요 (1-4): '));
+    const typeAnswer = await this.question(chalk.green(this.i18n.t('select_provider_type')));
     let providerType: 'openai' | 'ollama' | 'anthropic' | 'custom';
 
     switch (typeAnswer.trim()) {
@@ -158,7 +176,7 @@ export class ConfigWizard {
         providerType = 'custom';
         break;
       default:
-        console.log(chalk.red('잘못된 선택입니다. 기본값으로 OpenAI를 사용합니다.'));
+        console.log(chalk.red(this.i18n.t('invalid_provider_default')));
         providerType = 'openai';
         break;
     }
@@ -166,7 +184,7 @@ export class ConfigWizard {
     // Provider 이름 입력
     let providerName = '';
     if (providerType === 'custom') {
-      providerName = await this.question(chalk.green('Provider 이름을 입력하세요: '));
+      providerName = await this.question(chalk.green(this.i18n.t('enter_provider_name')));
     } else {
       providerName = providerType.charAt(0).toUpperCase() + providerType.slice(1);
     }
@@ -174,18 +192,18 @@ export class ConfigWizard {
     // API 키 입력 (Ollama 제외)
     let apiKey = '';
     if (providerType !== 'ollama') {
-      apiKey = await this.question(chalk.green(`${providerName}의 API 키를 입력하세요: `));
+      apiKey = await this.question(chalk.green(this.i18n.t('enter_api_key', providerName)));
     }
 
     // Base URL 입력 (Ollama 또는 사용자 정의)
     let baseUrl = '';
     if (providerType === 'ollama') {
-      baseUrl = await this.question(chalk.green('Ollama Base URL을 입력하세요 (기본값: http://localhost:11434): '));
+      baseUrl = await this.question(chalk.green(this.i18n.t('enter_ollama_url')));
       if (!baseUrl) {
         baseUrl = 'http://localhost:11434';
       }
     } else if (providerType === 'custom') {
-      baseUrl = await this.question(chalk.green('Base URL을 입력하세요 (선택 사항): '));
+      baseUrl = await this.question(chalk.green(this.i18n.t('enter_base_url')));
     }
 
     // 모델 입력
@@ -193,21 +211,21 @@ export class ConfigWizard {
     let models: string[] = [];
 
     if (providerType === 'openai') {
-      modelsInput = await this.question(chalk.green('사용 가능한 모델을 입력하세요 (쉼표로 구분, 기본값: gpt-4,gpt-3.5-turbo): '));
+      modelsInput = await this.question(chalk.green(this.i18n.t('enter_openai_models')));
       models = modelsInput ? modelsInput.split(',').map(m => m.trim()) : ['gpt-4', 'gpt-3.5-turbo'];
     } else if (providerType === 'anthropic') {
-      modelsInput = await this.question(chalk.green('사용 가능한 모델을 입력하세요 (쉼표로 구분, 기본값: claude-3-opus-20240229,claude-3-sonnet-20240229): '));
+      modelsInput = await this.question(chalk.green(this.i18n.t('enter_anthropic_models')));
       models = modelsInput ? modelsInput.split(',').map(m => m.trim()) : ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'];
     } else if (providerType === 'ollama') {
-      modelsInput = await this.question(chalk.green('사용 가능한 모델을 입력하세요 (쉼표로 구분, 예: llama3,mistral): '));
+      modelsInput = await this.question(chalk.green(this.i18n.t('enter_ollama_models')));
       models = modelsInput ? modelsInput.split(',').map(m => m.trim()) : [];
     } else {
-      modelsInput = await this.question(chalk.green('사용 가능한 모델을 입력하세요 (쉼표로 구분): '));
+      modelsInput = await this.question(chalk.green(this.i18n.t('enter_custom_models')));
       models = modelsInput ? modelsInput.split(',').map(m => m.trim()) : [];
     }
 
     // 기본값으로 설정할지 여부
-    const isDefaultAnswer = await this.question(chalk.green('이 Provider를 기본값으로 설정하시겠습니까? (y/n): '));
+    const isDefaultAnswer = await this.question(chalk.green(this.i18n.t('set_as_default')));
     const isDefault = isDefaultAnswer.toLowerCase() === 'y';
 
     // Provider 객체 생성
@@ -231,7 +249,7 @@ export class ConfigWizard {
 
     // Provider 추가
     this.configManager.addProvider(provider);
-    console.log(chalk.green(`${providerName} Provider가 추가되었습니다.`));
+    console.log(chalk.green(this.i18n.t('provider_added', providerName)));
   }
 
   /**
@@ -241,32 +259,32 @@ export class ConfigWizard {
     const providers = this.configManager.getAllProviders();
 
     if (providers.length === 0) {
-      console.log(chalk.yellow('제거할 Provider가 없습니다.'));
+      console.log(chalk.yellow(this.i18n.t('no_providers_to_remove')));
       return;
     }
 
-    console.log(chalk.cyan('=== Provider 제거 ==='));
+    console.log(chalk.cyan(this.i18n.t('remove_provider_title')));
     providers.forEach((provider, index) => {
       console.log(`${index + 1}. ${provider.name} - ${provider.type}`);
     });
     console.log();
 
-    const answer = await this.question(chalk.green(`제거할 Provider 번호를 선택하세요 (1-${providers.length}): `));
+    const answer = await this.question(chalk.green(this.i18n.t('select_provider_to_remove', providers.length)));
     const index = parseInt(answer.trim()) - 1;
 
     if (isNaN(index) || index < 0 || index >= providers.length) {
-      console.log(chalk.red('잘못된 선택입니다.'));
+      console.log(chalk.red(this.i18n.t('invalid_selection')));
       return;
     }
 
     const providerName = providers[index].name;
-    const confirmAnswer = await this.question(chalk.yellow(`정말로 ${providerName}을(를) 제거하시겠습니까? (y/n): `));
+    const confirmAnswer = await this.question(chalk.yellow(this.i18n.t('confirm_remove', providerName)));
 
     if (confirmAnswer.toLowerCase() === 'y') {
       this.configManager.removeProvider(providerName);
-      console.log(chalk.green(`${providerName} Provider가 제거되었습니다.`));
+      console.log(chalk.green(this.i18n.t('provider_removed', providerName)));
     } else {
-      console.log(chalk.gray('제거가 취소되었습니다.'));
+      console.log(chalk.gray(this.i18n.t('removal_cancelled')));
     }
   }
 
@@ -278,28 +296,67 @@ export class ConfigWizard {
     const defaultProvider = this.configManager.getDefaultProvider();
 
     if (providers.length === 0) {
-      console.log(chalk.yellow('등록된 Provider가 없습니다.'));
+      console.log(chalk.yellow(this.i18n.t('no_providers')));
       return;
     }
 
-    console.log(chalk.cyan('=== 기본 Provider 변경 ==='));
+    console.log(chalk.cyan(this.i18n.t('change_default_title')));
     providers.forEach((provider, index) => {
       const isDefault = provider.name === defaultProvider?.name;
-      const defaultMark = isDefault ? chalk.green(' (현재 기본값)') : '';
+      const defaultMark = isDefault ? chalk.green(this.i18n.t('current_default')) : '';
       console.log(`${index + 1}. ${provider.name} - ${provider.type}${defaultMark}`);
     });
     console.log();
 
-    const answer = await this.question(chalk.green(`기본값으로 설정할 Provider 번호를 선택하세요 (1-${providers.length}): `));
+    const answer = await this.question(chalk.green(this.i18n.t('select_default_provider', providers.length)));
     const index = parseInt(answer.trim()) - 1;
 
     if (isNaN(index) || index < 0 || index >= providers.length) {
-      console.log(chalk.red('잘못된 선택입니다.'));
+      console.log(chalk.red(this.i18n.t('invalid_selection')));
       return;
     }
 
     const providerName = providers[index].name;
     this.configManager.setDefaultProvider(providerName);
-    console.log(chalk.green(`${providerName}이(가) 기본 Provider로 설정되었습니다.`));
+    console.log(chalk.green(this.i18n.t('default_provider_changed', providerName)));
+  }
+
+  /**
+   * 언어 설정 마법사를 실행합니다.
+   */
+  private async changeLanguageWizard(): Promise<void> {
+    const currentLanguage = this.configManager.getLanguage();
+    const languageName = currentLanguage === 'ko' ? this.i18n.t('korean') : this.i18n.t('english');
+
+    console.log(chalk.cyan(this.i18n.t('language_settings_title')));
+    console.log(this.i18n.t('current_language', languageName));
+    console.log();
+    console.log(this.i18n.t('select_language'));
+    console.log(this.i18n.t('language_korean'));
+    console.log(this.i18n.t('language_english'));
+    console.log();
+
+    const answer = await this.question(chalk.green(this.i18n.t('select_language_option')));
+    let newLanguage: Language = currentLanguage;
+
+    switch (answer.trim()) {
+      case '1':
+        newLanguage = 'ko';
+        break;
+      case '2':
+        newLanguage = 'en';
+        break;
+      default:
+        console.log(chalk.red(this.i18n.t('invalid_selection')));
+        return;
+    }
+
+    // 언어 변경
+    this.configManager.setLanguage(newLanguage);
+    this.i18n.setLanguage(newLanguage);
+
+    // 변경된 언어로 메시지 표시
+    const newLanguageName = newLanguage === 'ko' ? this.i18n.t('korean') : this.i18n.t('english');
+    console.log(chalk.green(this.i18n.t('language_changed', newLanguageName)));
   }
 }

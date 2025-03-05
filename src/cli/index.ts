@@ -5,6 +5,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import dotenv from 'dotenv';
 import { ConfigManager, ConfigWizard } from '../config/index.js';
+import { I18n } from '../config/i18n.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -14,6 +15,9 @@ dotenv.config();
 // 설정 관리자 인스턴스 생성
 const configManager = new ConfigManager();
 
+// i18n 인스턴스 생성
+const i18n = I18n.getInstance();
+
 /**
  * 대화형 세션을 시작합니다.
  * @param options 에이전트 옵션
@@ -22,6 +26,9 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
   // 설정 로드
   configManager.loadConfig();
   configManager.loadEnv();
+
+  // 언어 설정 로드
+  i18n.setLanguage(configManager.getLanguage());
 
   // 에이전트 관리자 생성
   const agentManager = new AgentManager(options);
@@ -33,8 +40,8 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
     prompt: chalk.green('> ')
   });
 
-  console.log(chalk.magenta('Codebot이 준비되었습니다! 도움말을 보려면 /help를 입력하세요.'));
-  console.log(chalk.gray(`작업 디렉토리: ${process.cwd()}`));
+  console.log(chalk.magenta(i18n.t('welcome')));
+  console.log(chalk.gray(i18n.t('current_directory', process.cwd())));
 
   rl.prompt();
 
@@ -52,7 +59,7 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
     }
 
     // 로딩 스피너 표시
-    const spinner = ora('Codebot이 생각 중입니다...').start();
+    const spinner = ora(i18n.t('thinking')).start();
 
     try {
       // 에이전트 실행
@@ -63,8 +70,8 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
       console.log(chalk.blue('Codebot: ') + response);
     } catch (error: any) {
       // 오류 처리
-      spinner.fail('오류가 발생했습니다.');
-      console.error(chalk.red(`오류: ${error.message}`));
+      spinner.fail(i18n.t('error_occurred'));
+      console.error(chalk.red(i18n.t('error_message', error.message)));
     }
 
     rl.prompt();
@@ -81,16 +88,16 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
 
   switch (command) {
     case 'help':
-      console.log(chalk.yellow('사용 가능한 명령어:'));
-      console.log('/help     - 이 도움말 메시지를 표시합니다.');
-      console.log('/clear    - 대화 기록을 지웁니다.');
-      console.log('/config   - 설정 메뉴를 엽니다.');
-      console.log('/exit     - 대화 세션을 종료합니다.');
+      console.log(chalk.yellow(i18n.t('available_commands')));
+      console.log(i18n.t('help_command'));
+      console.log(i18n.t('clear_command'));
+      console.log(i18n.t('config_command'));
+      console.log(i18n.t('exit_command'));
       break;
 
     case 'clear':
       console.clear();
-      console.log(chalk.green('대화 기록이 지워졌습니다.'));
+      console.log(chalk.green(i18n.t('history_cleared')));
       break;
 
     case 'config':
@@ -108,7 +115,11 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
         prompt: chalk.green('> ')
       });
 
-      console.log(chalk.magenta('Codebot이 준비되었습니다! 도움말을 보려면 /help를 입력하세요.'));
+      // 언어 설정 다시 로드
+      configManager.loadConfig();
+      i18n.setLanguage(configManager.getLanguage());
+
+      console.log(chalk.magenta(i18n.t('welcome')));
       newRl.prompt();
 
       // 이벤트 리스너 다시 설정
@@ -129,7 +140,7 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
       break;
 
     default:
-      console.log(chalk.red(`알 수 없는 명령어: ${command}`));
+      console.log(chalk.red(i18n.t('unknown_command', command)));
       break;
   }
 
@@ -149,7 +160,7 @@ async function safeExecute(callback: () => Promise<void>): Promise<void> {
     } else if (error.code === 'EAUTHORIZATION') {
       console.error(chalk.red('인증에 실패했습니다. API 키를 확인하세요.'));
     } else {
-      console.error(chalk.red(`오류: ${error.message}`));
+      console.error(chalk.red(i18n.t('error_message', error.message)));
       if (process.env.DEBUG) {
         console.error(error);
       }
@@ -164,8 +175,11 @@ async function safeExecute(callback: () => Promise<void>): Promise<void> {
 async function ensureConfig(): Promise<void> {
   configManager.loadConfig();
 
+  // 언어 설정 로드
+  i18n.setLanguage(configManager.getLanguage());
+
   if (!configManager.configExists() || configManager.getAllProviders().length === 0) {
-    console.log(chalk.yellow('Codebot 설정이 필요합니다.'));
+    console.log(chalk.yellow(i18n.t('settings_required')));
     const wizard = new ConfigWizard();
     await wizard.start();
   }
@@ -258,7 +272,7 @@ export function createCLI(): Command {
       const agentManager = new AgentManager(agentOptions);
 
       // 로딩 스피너 표시
-      const spinner = ora('Codebot이 작업을 처리 중입니다...').start();
+      const spinner = ora(i18n.t('thinking')).start();
 
       await safeExecute(async () => {
         const response = await agentManager.run(task);
