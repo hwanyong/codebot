@@ -7,13 +7,14 @@
     "codebot": "dist/cli/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run fix-shebang",
+    "fix-shebang": "node scripts/fix-shebang.mjs",
     "start": "node dist/cli/cli.js",
     "dev": "ts-node --esm src/cli/cli.ts",
     "lint": "eslint src/**/*.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "release": "NODE_ENV=production npm publish --access public",
-    "postinstall": "node scripts/check-global.mjs"
+    "postinstall": "node --no-warnings scripts/check-global.mjs"
   },
   "dependencies": {
     "@langchain/anthropic": "^0.1.1",

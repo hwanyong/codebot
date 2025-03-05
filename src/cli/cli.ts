@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env node --no-warnings
 
 // 배포 환경 감지
 const isProduction = process.env.NODE_ENV === 'production' ||

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env node --no-warnings
 
 /**
  * 이 스크립트는 패키지가 전역으로 설치되었는지 확인하고,
