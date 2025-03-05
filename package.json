@@ -1,6 +1,6 @@
 {
   "name": "@uhd_kr/codebot",
-  "version": "1.4.5",
+  "version": "1.4.8",
   "description": "AI-based coding assistant CLI tool",
   "type": "module",
   "bin": {
