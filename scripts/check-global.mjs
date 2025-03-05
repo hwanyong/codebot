@@ -5,9 +5,10 @@
  * 설정 파일이 없는 경우 설정 마법사를 실행하도록 안내합니다.
  */
 
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { fileURLToPath } from 'url';
 
 // 지원하는 언어 목록
 const LANGUAGES = ['ko', 'en'];

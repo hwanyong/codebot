@@ -1,6 +1,6 @@
 {
   "name": "@uhd_kr/codebot",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "AI-based coding assistant CLI tool",
   "type": "module",
   "bin": {
@@ -13,7 +13,7 @@
     "lint": "eslint src/**/*.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "release": "npm publish --access public",
-    "postinstall": "node scripts/check-global.js"
+    "postinstall": "node scripts/check-global.mjs"
   },
   "dependencies": {
     "@langchain/anthropic": "^0.1.1",
