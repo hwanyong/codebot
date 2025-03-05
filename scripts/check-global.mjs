@@ -5,6 +5,9 @@
  * 설정 파일이 없는 경우 설정 마법사를 실행하도록 안내합니다.
  */
 
+// 경고 메시지 숨기기
+process.noDeprecation = true;
+
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -113,10 +116,10 @@ function detectLanguage() {
       }
     }
 
-    // 기본값은 한국어
-    return 'ko';
+    // 기본값은 영어
+    return 'en';
   } catch (error) {
-    return 'ko';
+    return 'en';
   }
 }
 

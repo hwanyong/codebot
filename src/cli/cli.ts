@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+// 경고 메시지 숨기기
+// @ts-ignore: Node.js 런타임 속성이지만 TypeScript 타입에 정의되지 않음
+process.noDeprecation = true;
+
 import { createCLI } from './index.js';
 import path from 'path';
 import fs from 'fs';

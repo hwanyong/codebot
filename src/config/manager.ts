@@ -37,7 +37,7 @@ export interface Config {
 const DEFAULT_CONFIG: Config = {
   providers: [],
   defaultProvider: undefined,
-  language: 'ko' // 기본 언어는 한국어
+  language: 'en' // 기본 언어는 영어
 };
 
 /**
