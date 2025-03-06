@@ -1,4 +1,5 @@
 import { StateGraph } from '@langchain/langgraph';
+import { RunnableConfig } from '@langchain/core/runnables';
 import { StateAnnotation, State } from './state.js';
 import {
   nodeTranslateInput,
@@ -9,6 +10,7 @@ import {
   nodeGenerateResponse,
   nodeHandleError
 } from './nodes.js';
+import { Logger } from '../utils/logger.js';
 
 /**
  * Routing function
@@ -22,6 +24,7 @@ function routeNode(state: State): string {
   // If in error state, go to error handling node
   // 오류 상태인 경우 오류 처리 노드로 이동
   if (state.context.executionStatus === 'error') {
+    Logger.graphState('Router Decision', 'Route to handleError due to error state');
     return 'handleError';
   }
 
@@ -33,6 +36,7 @@ function routeNode(state: State): string {
     state.context.totalSteps !== undefined &&
     state.context.currentStepIndex < state.context.totalSteps
   ) {
+    Logger.graphState('Router Decision', `Route to executeStep (${state.context.currentStepIndex}/${state.context.totalSteps})`);
     return 'executeStep';
   }
 
@@ -42,17 +46,20 @@ function routeNode(state: State): string {
     state.context.executionStatus === 'completed' &&
     state.context.verified === undefined
   ) {
+    Logger.graphState('Router Decision', 'Route to verifyResult for verification');
     return 'verifyResult';
   }
 
   // If verification is completed, go to response generation node
   // 검증이 완료된 경우 응답 생성 노드로 이동
   if (state.context.verified !== undefined) {
+    Logger.graphState('Router Decision', 'Route to generateResponse after verification');
     return 'generateResponse';
   }
 
   // Default to response generation node
   // 기본적으로 응답 생성 노드로 이동
+  Logger.graphState('Router Decision', 'Default route to generateResponse');
   return 'generateResponse';
 }
 
@@ -90,3 +97,32 @@ builder
 // Compile graph
 // 그래프 컴파일
 export const codebotGraph = builder.compile();
+
+// Wrap the original invoke method to add logging
+// 원본 invoke 메소드를 래핑하여 로깅을 추가합니다
+const originalInvoke = codebotGraph.invoke;
+
+// 화살표 함수로 변경하여 this 컨텍스트 문제 해결
+codebotGraph.invoke = async (state: State, config?: any) => {
+  Logger.graphState('Graph Execution Started', {
+    executionStatus: state.context.executionStatus,
+    messageCount: state.messages.length
+  });
+
+  try {
+    // 명시적으로 codebotGraph에 바인딩하여 this 문제 해결
+    const result = await originalInvoke.call(codebotGraph, state, config);
+
+    Logger.graphState('Graph Execution Completed', {
+      executionStatus: result.context.executionStatus,
+      messageCount: result.messages.length,
+      currentStepIndex: result.context.currentStepIndex,
+      totalSteps: result.context.totalSteps
+    });
+
+    return result;
+  } catch (error) {
+    Logger.error('Error during graph execution', error);
+    throw error;
+  }
+};

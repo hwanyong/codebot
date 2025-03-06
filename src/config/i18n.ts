@@ -483,6 +483,78 @@ export const cliMessages: I18nMessages = {
   'global_usage_info': {
     ko: '전역 설치 후 "codebot" 명령을 어디서나 사용할 수 있습니다.',
     en: 'After global installation, you can use the "codebot" command from anywhere.'
+  },
+
+  // 번역 도구 관련 메시지
+  'translation_completed': {
+    ko: '번역이 완료되었습니다.',
+    en: 'Translation completed.'
+  },
+  'already_target_language': {
+    ko: '텍스트가 이미 대상 언어로 되어 있습니다.',
+    en: 'Text is already in the target language.'
+  },
+  'source_language_detected': {
+    ko: '감지된 원본 언어: {0}',
+    en: 'Source language detected: {0}'
+  },
+  'translation_failed': {
+    ko: '번역에 실패했습니다: {0}',
+    en: 'Translation failed: {0}'
+  },
+  'unsupported_language': {
+    ko: '지원되지 않는 언어: {0}. 현재는 영어와 한국어만 지원합니다.',
+    en: 'Unsupported language: {0}. Currently only English and Korean are supported.'
+  },
+
+  // 디버깅 로깅 관련 메시지
+  'debug_mode_enabled': {
+    ko: '🐞 디버그 모드가 활성화되었습니다.',
+    en: '🐞 Debug mode is enabled.'
+  },
+  'debug_mode_description': {
+    ko: '상세한 로그와 오류 정보가 표시됩니다.',
+    en: 'Detailed logs and error information will be shown.'
+  },
+  'log_enter_node': {
+    ko: '노드 진입',
+    en: 'ENTER NODE'
+  },
+  'log_exit_node': {
+    ko: '노드 종료',
+    en: 'EXIT NODE'
+  },
+  'log_status_error': {
+    ko: '오류',
+    en: 'error'
+  },
+  'log_status_completed': {
+    ko: '완료',
+    en: 'completed'
+  },
+  'log_status_success': {
+    ko: '성공',
+    en: 'success'
+  },
+  'log_status_fail': {
+    ko: '실패',
+    en: 'fail'
+  },
+  'log_graph_state': {
+    ko: '그래프 상태',
+    en: 'GRAPH'
+  },
+  'log_error': {
+    ko: '오류',
+    en: 'ERROR'
+  },
+  'log_tool_execution': {
+    ko: '도구 실행',
+    en: 'TOOL EXECUTION'
+  },
+  'log_tool_result': {
+    ko: '도구 결과',
+    en: 'TOOL RESULT'
   }
 };
 

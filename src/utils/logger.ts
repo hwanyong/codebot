@@ -5,6 +5,11 @@ import chalk from 'chalk';
  * 디버깅을 위한 로거 유틸리티
  */
 export class Logger {
+  /**
+   * Check if debug mode is enabled
+   * 디버그 모드가 활성화되었는지 확인
+   * @returns True if debug mode is enabled
+   */
   private static isDebugEnabled(): boolean {
     return process.env.DEBUG === 'true';
   }
@@ -77,5 +82,40 @@ export class Logger {
     if (error) {
       console.log(chalk.red(error.stack || error.toString()));
     }
+  }
+
+  /**
+   * Log tool execution
+   * 도구 실행 로그
+   * @param toolName Tool name (도구 이름)
+   * @param input Tool input (도구 입력)
+   */
+  public static toolExecution(toolName: string, input: any): void {
+    if (!Logger.isDebugEnabled()) return;
+
+    console.log(chalk.blue(`[DEBUG] ${new Date().toISOString()} 🔧 TOOL EXECUTION: ${toolName}`));
+    console.log(chalk.gray('─'.repeat(50)));
+    console.log(chalk.gray(typeof input === 'string' ? input : JSON.stringify(input, null, 2)));
+    console.log(chalk.gray('─'.repeat(50)));
+  }
+
+  /**
+   * Log tool result
+   * 도구 결과 로그
+   * @param toolName Tool name (도구 이름)
+   * @param result Tool result (도구 결과)
+   * @param success Whether execution was successful (실행 성공 여부)
+   */
+  public static toolResult(toolName: string, result: any, success: boolean = true): void {
+    if (!Logger.isDebugEnabled()) return;
+
+    const emoji = success ? '✅' : '❌';
+    const color = success ? chalk.green : chalk.red;
+    const statusText = success ? 'SUCCESS' : 'FAIL';
+
+    console.log(color(`[DEBUG] ${new Date().toISOString()} ${emoji} TOOL RESULT: ${toolName} (${statusText})`));
+    console.log(chalk.gray('─'.repeat(50)));
+    console.log(chalk.gray(typeof result === 'string' ? result : JSON.stringify(result, null, 2)));
+    console.log(chalk.gray('─'.repeat(50)));
   }
 }
