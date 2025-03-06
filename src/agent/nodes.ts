@@ -74,14 +74,27 @@ export async function nodeTranslateInput(state: State): Promise<Update> {
 
     const promptValue = [new HumanMessage(formattedPrompt)];
 
-    // Call model
-    // 모델 호출
-    Logger.nodeAction('translateInput', 'Calling model for translation');
-    const result = await state.context.model.invoke(promptValue, config);
+    // Stream response using the model's streaming capability
+    // 모델의 스트리밍 기능을 사용하여 응답 스트리밍
+    Logger.nodeAction('translateInput', 'Starting model streaming for translation');
 
-    // Extract only the translated content without any explanations or metadata
-    // 설명이나 메타데이터 없이 번역된 내용만 추출
-    let translatedText = result.content as string;
+    console.log('\n--- Translation Stream Started ---');
+
+    const stream = await state.context.model.stream(promptValue, config);
+
+    // Collect the full response while streaming individual tokens
+    // 개별 토큰을 스트리밍하면서 전체 응답 수집
+    let translatedText = '';
+    for await (const chunk of stream) {
+      const content = chunk.content;
+      if (content) {
+        // Print each token as it arrives
+        // 도착하는 각 토큰 출력
+        process.stdout.write(content);
+        translatedText += content;
+      }
+    }
+    console.log('\n--- Translation Stream Completed ---');
 
     // Clean the translated text by removing any explanations or formatting
     // 번역된 텍스트에서 설명이나 형식을 제거하여 정리
