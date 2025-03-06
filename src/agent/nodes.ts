@@ -66,12 +66,12 @@ export async function nodeTranslateInput(state: State): Promise<Update> {
     // Use a simplified approach to avoid the formatMessages issue
     // ChatPromptTemplate 문제를 피하기 위해 간소화된 접근 방식 사용
     Logger.nodeAction('translateInput', 'Creating direct prompt');
-    
+
     // Create a formatted prompt directly
     // 직접 형식화된 프롬프트 생성
     const formattedPrompt = TRANSLATE_INPUT_PROMPT.replace('{user_request}', lastMessage.content as string)
                                              .replace('{translated_message}', '[translated content will be here]');
-    
+
     const promptValue = [new HumanMessage(formattedPrompt)];
 
     // Call model
