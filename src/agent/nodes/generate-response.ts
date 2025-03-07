@@ -91,18 +91,41 @@ export async function nodeGenerateResponse(state: State): Promise<Update> {
 
     // Call model
     Logger.nodeAction('generateResponse', `Calling model for ${directResponse ? 'direct' : 'standard'} response generation`);
-    const result = await state.context.model.invoke(promptValue, config);
-    Logger.nodeAction('generateResponse', logMessage);
+    Logger.nodeModelStart('translateInput', 'Starting model streaming for translation');
+    // const result = await state.context.model.invoke(promptValue, config);
+    const stream = await state.context.model.stream(promptValue, config);
+    // Logger.nodeAction('generateResponse', logMessage);
+
+    let generatedResponse = '';
+    for await (const chunk of stream) {
+      const content = chunk.content;
+      if (content) {
+        generatedResponse += content;
+      }
+      // Log model streaming events
+      Logger.nodeModelStreaming('generateResponse', content);
+    }
+    // Log model end event
+    Logger.nodeModelEnd('generateResponse');
 
     // Return final response
     Logger.nodeExit('generateResponse');
+
     return {
-      messages: [new AIMessage(result.content as string)],
+      messages: [new AIMessage(generatedResponse)],
       context: {
         ...state.context,
         executionStatus: 'completed'
       } as any
-    };
+    }
+
+    // return {
+    //   messages: [new AIMessage(result.content as string)],
+    //   context: {
+    //     ...state.context,
+    //     executionStatus: 'completed'
+    //   } as any
+    // };
   } catch (error) {
     // Provide contextual error information
     const errorType = directResponse ? 'direct' : 'standard';

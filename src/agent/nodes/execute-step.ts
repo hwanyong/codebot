@@ -75,17 +75,36 @@ export async function nodeExecuteStep(state: State): Promise<Update> {
   };
 
   try {
-    // Call model
-    // 모델 호출
+    // Call model with streaming
+    // 스트리밍으로 모델 호출
     Logger.nodeAction('executeStep', 'Calling model for tool selection');
-    const result = await state.context.model.invoke(promptValue, config);
+    Logger.nodeModelStart('executeStep', 'Starting model streaming for tool selection');
+
+    // Stream response using the model's streaming capability
+    // 모델의 스트리밍 기능을 사용하여 응답 스트리밍
+    const stream = await state.context.model.stream(promptValue, config);
+
+    // Collect the full response while streaming individual tokens
+    // 개별 토큰을 스트리밍하면서 전체 응답 수집
+    let resultContent = '';
+    for await (const chunk of stream) {
+      const content = chunk.content;
+      if (content) {
+        // 모델 스트리밍 이벤트 발생
+        Logger.nodeModelStreaming('executeStep', content);
+        resultContent += content;
+      }
+    }
+
+    // 모델 응답 완료 이벤트 발생
+    Logger.nodeModelEnd('executeStep');
 
     // Extract tool call
     // 도구 호출 추출
     Logger.nodeAction('executeStep', 'Parsing tool call from model response');
     let toolCall: { tool: string; input: any } | null = null;
     try {
-      const content = result.content as string;
+      const content = resultContent;
       const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/({[\s\S]*})/);
       if (jsonMatch) {
         toolCall = JSON.parse(jsonMatch[1]);
@@ -141,7 +160,7 @@ export async function nodeExecuteStep(state: State): Promise<Update> {
 
       Logger.nodeExit('executeStep');
       return {
-        messages: [new AIMessage(result.content as string)],
+        messages: [new AIMessage(resultContent)],
         context: {
           ...state.context,
           currentStepIndex: currentStepIndex + 1,

@@ -40,22 +40,40 @@ export async function nodeAnalyzeTask(state: State): Promise<Update> {
   };
 
   try {
-    // Call model
-    // 모델 호출
+    // Call model with streaming
+    // 스트리밍으로 모델 호출
     Logger.nodeAction('analyzeTask', 'Calling model for task analysis');
-    const result = await state.context.model.invoke(promptValue, config);
+    Logger.nodeModelStart('analyzeTask', 'Starting model streaming for task analysis');
+
+    // Stream response using the model's streaming capability
+    // 모델의 스트리밍 기능을 사용하여 응답 스트리밍
+    const stream = await state.context.model.stream(promptValue, config);
+
+    // Collect the full response while streaming individual tokens
+    // 개별 토큰을 스트리밍하면서 전체 응답 수집
+    let resultContent = '';
+    for await (const chunk of stream) {
+      const content = chunk.content;
+      if (content) {
+        // 모델 스트리밍 이벤트 발생
+        Logger.nodeModelStreaming('analyzeTask', content);
+        resultContent += content;
+      }
+    }
+
+    // 모델 응답 완료 이벤트 발생
+    Logger.nodeModelEnd('analyzeTask');
 
     // Parse JSON response
     // JSON 응답 파싱
     Logger.nodeAction('analyzeTask', 'Parsing task analysis result');
     let taskAnalysis: TaskAnalysis;
     try {
-      const content = result.content as string;
-      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/({[\s\S]*})/);
+      const jsonMatch = resultContent.match(/```json\n([\s\S]*?)\n```/) || resultContent.match(/({[\s\S]*})/);
       if (jsonMatch) {
         taskAnalysis = JSON.parse(jsonMatch[1]);
       } else {
-        taskAnalysis = JSON.parse(content);
+        taskAnalysis = JSON.parse(resultContent);
       }
       Logger.nodeAction('analyzeTask', `Task analysis complete with ${taskAnalysis.subtasks?.length || 0} subtasks`);
       Logger.graphState('Task Analysis', taskAnalysis);
@@ -78,7 +96,7 @@ export async function nodeAnalyzeTask(state: State): Promise<Update> {
 
     // Save analysis result
     // 분석 결과 저장
-    const aiMessage = new AIMessage(result.content as string);
+    const aiMessage = new AIMessage(resultContent);
 
     Logger.nodeExit('analyzeTask');
     return {

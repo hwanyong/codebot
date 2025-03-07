@@ -80,22 +80,40 @@ export async function nodePlanExecution(state: State): Promise<Update> {
   };
 
   try {
-    // Call model
-    // 모델 호출
+    // Call model with streaming
+    // 스트리밍으로 모델 호출
     Logger.nodeAction('planExecution', 'Calling model for execution planning');
-    const result = await state.context.model.invoke(promptValue, config);
+    Logger.nodeModelStart('planExecution', 'Starting model streaming for execution planning');
+
+    // Stream response using the model's streaming capability
+    // 모델의 스트리밍 기능을 사용하여 응답 스트리밍
+    const stream = await state.context.model.stream(promptValue, config);
+
+    // Collect the full response while streaming individual tokens
+    // 개별 토큰을 스트리밍하면서 전체 응답 수집
+    let resultContent = '';
+    for await (const chunk of stream) {
+      const content = chunk.content;
+      if (content) {
+        // 모델 스트리밍 이벤트 발생
+        Logger.nodeModelStreaming('planExecution', content);
+        resultContent += content;
+      }
+    }
+
+    // 모델 응답 완료 이벤트 발생
+    Logger.nodeModelEnd('planExecution');
 
     // Parse JSON response
     // JSON 응답 파싱
     Logger.nodeAction('planExecution', 'Parsing execution plan');
     let executionPlan: ExecutionPlan;
     try {
-      const content = result.content as string;
-      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/({[\s\S]*})/);
+      const jsonMatch = resultContent.match(/```json\n([\s\S]*?)\n```/) || resultContent.match(/({[\s\S]*})/);
       if (jsonMatch) {
         executionPlan = JSON.parse(jsonMatch[1]);
       } else {
-        executionPlan = JSON.parse(content);
+        executionPlan = JSON.parse(resultContent);
       }
       Logger.nodeAction('planExecution', `Execution plan created with ${executionPlan.plan.length} steps`);
       Logger.graphState('Execution Plan', executionPlan);
@@ -122,7 +140,7 @@ export async function nodePlanExecution(state: State): Promise<Update> {
         (executionPlan.plan.length === 1 && executionPlan.plan[0].tool === 'direct_response')) {
       Logger.nodeAction('planExecution', 'Plan indicates direct response without tool execution');
       return {
-        messages: [new AIMessage(result.content as string)],
+        messages: [new AIMessage(resultContent)],
         context: {
           ...state.context,
           executionPlan,
@@ -137,7 +155,7 @@ export async function nodePlanExecution(state: State): Promise<Update> {
     // 실행 계획 저장
     Logger.nodeExit('planExecution');
     return {
-      messages: [new AIMessage(result.content as string)],
+      messages: [new AIMessage(resultContent)],
       context: {
         ...state.context,
         executionPlan,

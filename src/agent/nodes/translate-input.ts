@@ -79,9 +79,9 @@ export async function nodeTranslateInput(state: State): Promise<Update> {
       const content = chunk.content;
       if (content) {
         // 모델 스트리밍 이벤트 발생
-        Logger.nodeModelStreaming('translateInput', content);
         translatedText += content;
       }
+      Logger.nodeModelStreaming('translateInput', content);
     }
 
     // 모델 응답 완료 이벤트 발생
