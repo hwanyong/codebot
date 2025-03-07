@@ -36,6 +36,10 @@ export interface ContextState {
   verificationReport?: any;
   verified?: boolean;
   errorHandling?: any;
+  // 직접 응답 요청 여부
+  directResponse?: boolean;
+  // 도구 실행 필요 여부
+  requiresToolExecution?: boolean;
 }
 
 // 상태 인터페이스
@@ -54,7 +58,7 @@ export interface Update {
 
 // 태스크 분석 결과 인터페이스
 export interface TaskAnalysis {
-  task_type: 'code_creation' | 'code_modification' | 'code_analysis' | 'environment_setup';
+  task_type: 'simple_response' | 'code_creation' | 'code_modification' | 'code_analysis' | 'environment_setup';
   subtasks: {
     id: string;
     description: string;

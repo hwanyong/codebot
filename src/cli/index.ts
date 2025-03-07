@@ -2,7 +2,6 @@ import { Command } from 'commander';
 import { AgentManager, AgentOptions, ModelOptions } from '../agent/manager.js';
 import readline from 'readline';
 import chalk from 'chalk';
-import ora from 'ora';
 import dotenv from 'dotenv';
 import { ConfigManager, ConfigWizard } from '../config/index.js';
 import { I18n } from '../config/i18n.js';
@@ -11,6 +10,7 @@ import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
+import { SpinnerManager } from './spinner-manager.js';
 
 // exec를 Promise로 변환
 const execPromise = promisify(exec);
@@ -39,6 +39,9 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
   // 에이전트 관리자 생성
   const agentManager = new AgentManager(options);
 
+  // 스피너 관리자 생성
+  const spinnerManager = new SpinnerManager();
+
   // Promise를 반환하여 readline 인터페이스가 닫힐 때까지 완료되지 않도록 함
   return new Promise<void>((resolve) => {
     // 읽기/쓰기 인터페이스 생성
@@ -66,22 +69,15 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
         return;
       }
 
-      // 로딩 스피너 표시
-      const spinner = ora(i18n.t('thinking')).start();
-
       try {
-        // 에이전트 실행
+        // 에이전트 실행 - 스피너는 이벤트에 따라 자동으로 관리됨
         const response = await agentManager.run(line);
 
-        // 스피너 중지 및 응답 표시
-        spinner.stop();
+        // 응답 표시 - 스피너는 자동으로 닫힘
         console.log(chalk.blue('Codebot: ') + response);
       } catch (error: any) {
-        // 오류 처리
-        spinner.fail(i18n.t('error_occurred'));
-        console.error(chalk.red(i18n.t('error_message', error.message)));
-
-        // 디버그 모드에서는 상세 오류 정보 표시
+        // 오류 처리는 이벤트 시스템에서 자동으로 처리
+        // 추가적인 오류 정보가 필요한 경우에만 표시
         if (process.env.DEBUG) {
           console.error(error);
         }
@@ -95,6 +91,9 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
 
     // readline 인터페이스가 닫힐 때 이벤트 처리
     rl.on('close', () => {
+      // 스피너 관리자 정리
+      spinnerManager.cleanup();
+
       console.log(chalk.green(i18n.t('goodbye')));
       // Promise 해결
       resolve();
@@ -102,6 +101,8 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
 
     // SIGINT(Ctrl+C) 이벤트를 처리하여 정상적으로 종료
     process.on('SIGINT', () => {
+      // 스피너 관리자 정리
+      spinnerManager.cleanup();
       rl.close();
     });
   });
@@ -170,9 +171,10 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
 
     case 'info':
       try {
-        const spinner = ora(i18n.t('loading')).start();
+        // 스피너 관리자 생성 - 일회성 사용
+        const spinnerManager = new SpinnerManager();
         const info = await getProjectInfo();
-        spinner.stop();
+        // 스피너는 자동으로 닫힘
 
         console.log(chalk.bold(i18n.t('project_info')));
         console.log(chalk.cyan(`${i18n.t('working_directory')}:`), info.workingDirectory);
@@ -225,40 +227,32 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
         // 오류 발생 시에도 프롬프트 표시
         rl.prompt();
       }
-      return; // 여기서 함수 종료하여 아래의 rl.prompt() 호출 방지
+      return;
 
     case 'exec':
       if (!args) {
         console.log(chalk.yellow(i18n.t('exec_usage')));
         rl.prompt();
-        return; // 여기서 함수 종료
+        return;
       }
 
       console.log(chalk.cyan(`${i18n.t('executing_command')}:`), args);
 
-      // 스피너 생성 (아직 시작하지 않음)
-      let spinner = ora({
-        text: i18n.t('executing'),
-        color: 'yellow'
-      });
-
-      // 스피너 시작
-      spinner.start();
+      // 스피너 관리자 생성 - 일회성 사용
+      const execSpinnerManager = new SpinnerManager();
 
       // 명령어 실행 - await를 사용하여 Promise가 완료될 때까지 기다림
       await new Promise<void>((resolve) => {
         execPromise(args)
           .then(({ stdout, stderr }) => {
-            // 성공적으로 실행 완료
-            spinner.stop(); // 스피너 중지
+            // 성공적으로 실행 완료 - 스피너 자동 닫힘
 
             if (stdout) console.log(stdout);
             if (stderr) console.error(chalk.yellow(stderr));
             console.log(chalk.green(i18n.t('command_completed')));
           })
           .catch((error) => {
-            // 명령어 실행 중 오류 발생
-            spinner.stop(); // 스피너 중지
+            // 명령어 실행 중 오류 발생 - 스피너 자동 닫힘
 
             console.error(chalk.red(`${i18n.t('command_error')}:`));
             if (error.stdout) console.log(error.stdout);
@@ -266,10 +260,7 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
           })
           .finally(() => {
             // 성공이든 실패든 항상 실행
-            // 혹시 모를 상황을 대비해 스피너가 아직 돌고 있다면 중지
-            if (spinner.isSpinning) {
-              spinner.stop();
-            }
+            execSpinnerManager.cleanup();
 
             // 프롬프트 표시
             rl.prompt();
@@ -279,7 +270,7 @@ async function handleSlashCommand(line: string, rl: readline.Interface): Promise
           });
       });
 
-      return; // 여기서 함수 종료하여 아래의 rl.prompt() 호출 방지
+      return;
 
     case 'exit':
       console.log(chalk.green(i18n.t('goodbye')));
@@ -531,15 +522,12 @@ export function createCLI(): Command {
       const agentManager = new AgentManager(agentOptions);
 
       // 로딩 스피너 표시
-      const spinner = ora(i18n.t('thinking')).start();
+      const spinnerManager = new SpinnerManager();
 
       try {
         const response = await agentManager.run(task);
-        spinner.stop();
         console.log(response);
       } catch (error: any) {
-        spinner.stop();
-
         if (error.code === 'ECONNREFUSED') {
           console.error(chalk.red('AI 서비스에 연결할 수 없습니다. 네트워크 연결을 확인하세요.'));
         } else if (error.code === 'EAUTHORIZATION') {
@@ -553,6 +541,8 @@ export function createCLI(): Command {
 
         // run 명령어에서는 오류 발생 시 종료
         process.exit(1);
+      } finally {
+        spinnerManager.cleanup();
       }
     });
 
@@ -569,9 +559,8 @@ export function createCLI(): Command {
     .description(i18n.t('cmd_info_desc'))
     .action(async () => {
       try {
-        const spinner = ora(i18n.t('loading')).start();
+        const spinnerManager = new SpinnerManager();
         const info = await getProjectInfo();
-        spinner.stop();
 
         console.log(chalk.bold(i18n.t('project_info')));
         console.log(chalk.cyan(`${i18n.t('working_directory')}:`), info.workingDirectory);
@@ -632,11 +621,9 @@ export function createCLI(): Command {
           console.log(chalk.cyan(`${i18n.t('executing_command')}:`), command);
         }
 
-        const spinner = options.silent ? ora().start() : ora(i18n.t('executing')).start();
+        const spinnerManager = new SpinnerManager();
 
         const { stdout, stderr } = await execPromise(command);
-
-        spinner.stop();
 
         if (!options.silent) {
           if (stdout) console.log(stdout);
