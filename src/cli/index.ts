@@ -11,6 +11,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
 import { SpinnerManager } from './spinner-manager.js';
+import { Logger } from '../utils/logger.js';
 
 // exec를 Promise로 변환
 const execPromise = promisify(exec);
@@ -425,6 +426,7 @@ export function createCLI(): Command {
     .description('AI 기반 코딩 어시스턴트 CLI')
     .version('1.0.0');
 
+  // chat 명령어에 노드별 AI 스트림 제어 옵션 추가
   program
     .command('chat')
     .description('Codebot과 대화 세션을 시작합니다.')
@@ -432,9 +434,40 @@ export function createCLI(): Command {
     .option('-p, --provider <n>', '사용할 모델 제공자를 지정합니다.')
     .option('-t, --temperature <number>', '모델 온도를 지정합니다.', '0.7')
     .option('-v, --verbose', '상세 로깅을 활성화합니다.')
+    .option('-d, --debug', '디버그 모드를 활성화합니다.')
+    .option('-a, --ai-stream', '모든 노드에 대한 AI 스트림 출력을 활성화합니다.')
+    .option('--stream-nodes <nodes>', '쉼표로 구분된 AI 스트림을 표시할 노드 목록 (예: translateInput,executeStep)')
+    .option('--hide-stream-nodes <nodes>', '쉼표로 구분된 AI 스트림을 숨길 노드 목록')
     .action(async (options) => {
       // 설정 확인
       await ensureConfig();
+
+      // 노드별 스트림 설정 구성
+      const nodeStreamConfig: Record<string, boolean> = {};
+
+      if (options.streamNodes) {
+        const streamNodes = options.streamNodes.split(',').map((n: string) => n.trim());
+        streamNodes.forEach((node: string) => {
+          nodeStreamConfig[node] = true;
+        });
+      }
+
+      if (options.hideStreamNodes) {
+        const hideStreamNodes = options.hideStreamNodes.split(',').map((n: string) => n.trim());
+        hideStreamNodes.forEach((node: string) => {
+          nodeStreamConfig[node] = false;
+        });
+      }
+
+      // Logger 설정
+      Logger.configure({
+        verbose: !!options.verbose,
+        debug: !!options.debug,
+        aiStream: !!options.aiStream,
+        graphState: !!options.debug,
+        tools: true,
+        nodeStreamConfig
+      });
 
       // 기본 Provider 가져오기
       const defaultProvider = configManager.getDefaultProvider();
@@ -443,13 +476,11 @@ export function createCLI(): Command {
       // Provider 및 모델 설정
       const provider = options.provider || defaultProvider?.type || 'openai';
       const model = options.model || lastUsed?.model || defaultProvider?.models?.[0] || 'gpt-4';
-
       const modelOptions: ModelOptions = {
         provider: provider as any,
         model: model,
         temperature: parseFloat(options.temperature)
       };
-
       const agentOptions: AgentOptions = {
         model: modelOptions,
         verbose: options.verbose
@@ -461,7 +492,6 @@ export function createCLI(): Command {
       try {
         // 대화형 세션 시작
         await startInteractiveSession(agentOptions);
-
         // 이 코드는 startInteractiveSession이 완료된 후에만 실행됨
         // 하지만 startInteractiveSession은 readline 인터페이스가 닫힐 때까지 완료되지 않음
         // 따라서 이 코드는 실행되지 않을 것임
@@ -472,7 +502,7 @@ export function createCLI(): Command {
           console.error(chalk.red('인증에 실패했습니다. API 키를 확인하세요.'));
         } else {
           console.error(chalk.red(i18n.t('error_message', error.message)));
-          if (process.env.DEBUG) {
+          if (options.debug) {
             console.error(error);
           }
         }
@@ -485,6 +515,7 @@ export function createCLI(): Command {
       });
     });
 
+  // run 명령어에도 노드별 AI 스트림 제어 옵션 추가
   program
     .command('run')
     .description('특정 작업으로 Codebot을 실행합니다.')
@@ -493,9 +524,40 @@ export function createCLI(): Command {
     .option('-p, --provider <n>', '사용할 모델 제공자를 지정합니다.')
     .option('-t, --temperature <number>', '모델 온도를 지정합니다.', '0.7')
     .option('-v, --verbose', '상세 로깅을 활성화합니다.')
+    .option('-d, --debug', '디버그 모드를 활성화합니다.')
+    .option('-a, --ai-stream', '모든 노드에 대한 AI 스트림 출력을 활성화합니다.')
+    .option('--stream-nodes <nodes>', '쉼표로 구분된 AI 스트림을 표시할 노드 목록 (예: translateInput,executeStep)')
+    .option('--hide-stream-nodes <nodes>', '쉼표로 구분된 AI 스트림을 숨길 노드 목록')
     .action(async (task, options) => {
       // 설정 확인
       await ensureConfig();
+
+      // 노드별 스트림 설정 구성
+      const nodeStreamConfig: Record<string, boolean> = {};
+
+      if (options.streamNodes) {
+        const streamNodes = options.streamNodes.split(',').map((n: string) => n.trim());
+        streamNodes.forEach((node: string) => {
+          nodeStreamConfig[node] = true;
+        });
+      }
+
+      if (options.hideStreamNodes) {
+        const hideStreamNodes = options.hideStreamNodes.split(',').map((n: string) => n.trim());
+        hideStreamNodes.forEach((node: string) => {
+          nodeStreamConfig[node] = false;
+        });
+      }
+
+      // Logger 설정
+      Logger.configure({
+        verbose: !!options.verbose,
+        debug: !!options.debug,
+        aiStream: !!options.aiStream,
+        graphState: !!options.debug,
+        tools: true,
+        nodeStreamConfig
+      });
 
       // 기본 Provider 가져오기
       const defaultProvider = configManager.getDefaultProvider();
@@ -504,13 +566,11 @@ export function createCLI(): Command {
       // Provider 및 모델 설정
       const provider = options.provider || defaultProvider?.type || 'openai';
       const model = options.model || lastUsed?.model || defaultProvider?.models?.[0] || 'gpt-4';
-
       const modelOptions: ModelOptions = {
         provider: provider as any,
         model: model,
         temperature: parseFloat(options.temperature)
       };
-
       const agentOptions: AgentOptions = {
         model: modelOptions,
         verbose: options.verbose
@@ -518,7 +578,6 @@ export function createCLI(): Command {
 
       // 마지막 사용 정보 저장
       configManager.setLastUsed(provider, model);
-
       const agentManager = new AgentManager(agentOptions);
 
       // 로딩 스피너 표시
@@ -534,11 +593,10 @@ export function createCLI(): Command {
           console.error(chalk.red('인증에 실패했습니다. API 키를 확인하세요.'));
         } else {
           console.error(chalk.red(i18n.t('error_message', error.message)));
-          if (process.env.DEBUG) {
+          if (options.debug) {
             console.error(error);
           }
         }
-
         // run 명령어에서는 오류 발생 시 종료
         process.exit(1);
       } finally {

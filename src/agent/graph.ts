@@ -9,7 +9,7 @@ import {
   nodeVerifyResult,
   nodeGenerateResponse,
   nodeHandleError
-} from './nodes.js';
+} from './nodes/index.js';
 import { Logger } from '../utils/logger.js';
 
 /**
