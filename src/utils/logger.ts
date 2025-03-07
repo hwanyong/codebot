@@ -154,7 +154,6 @@ export class Logger {
   public static nodeModelStreaming(nodeName: string, content: string): void {
     // 해당 노드에 대한 스트리밍 가시성 확인
     const isVisible = Logger._isStreamingVisibleForNode(nodeName);
-
     if (isVisible) {
       // 실제 내용이 있는 경우에만 처리
       if (content.trim()) {
@@ -164,28 +163,23 @@ export class Logger {
           eventType: NodeEventType.MODEL_STREAMING,
           payload: { content }
         });
-
         // 디버그 모드나 특별히 설정된 노드의 경우 내용 출력
         if (Logger._config.debug || Logger._config.aiStream ||
             Logger._config.alwaysVisibleNodes.includes(nodeName)) {
-
           // 노드가 변경된 경우 새 스트리밍 세션 시작
           if (!Logger._lastStreamingNode || Logger._lastStreamingNode !== nodeName) {
             console.log(chalk.magenta(`\n[${nodeName} 스트림 시작]`));
             Logger._lastStreamingNode = nodeName;
             Logger._accumulatedOutput = '';
           }
-
           // 누적된 출력에서 새로운 부분만 추출하여 출력
           if (content.length > Logger._accumulatedOutput.length) {
             // 이전에 출력하지 않은 새 부분만 가져옴
             const newContent = content.substring(Logger._accumulatedOutput.length);
-
             // 새 내용이 있는 경우에만 출력
             if (newContent) {
               process.stdout.write(newContent);
             }
-
             // 현재 내용을 누적 출력에 저장
             Logger._accumulatedOutput = content;
           }
