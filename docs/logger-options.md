@@ -1,0 +1,302 @@
+# Codebot Logging Options Guide
+
+This document explains how the logging options (`-v, --verbose` and `-d, --debug`) work in Codebot.
+
+## Logging System Overview
+
+Codebot uses a centralized logging system to provide consistent logging throughout the application. This system is implemented through the `Logger` class in `src/utils/logger.ts`.
+
+## CLI Options
+
+The Codebot CLI provides the following logging-related options:
+
+### Basic Options
+- `-v, --verbose`: Enable detailed logging. Outputs detailed steps of program execution.
+- `-d, --debug`: Enable debug mode. Outputs error details and internal states.
+
+### AI Streaming Options
+- `-a, --ai-stream`: Enable AI stream output for all nodes.
+- `--stream-nodes <nodes>`: Comma-separated list of nodes to show AI stream.
+- `--hide-stream-nodes <nodes>`: Comma-separated list of nodes to hide AI stream.
+
+## How It Works
+
+### Option Processing Flow
+1. User specifies options in CLI
+2. Command handler parses options
+3. Logging settings are configured through the `Logger.configure()` method
+4. Each logging method determines output based on the configured values
+
+### Impact Scope of Each Option
+
+#### verbose Option
+- Outputs node entry/exit messages
+- Logs node actions
+- Logs model activity start/end
+
+Affects the following methods:
+- `Logger.nodeEntry()`
+- `Logger.nodeAction()`
+- `Logger.nodeModelStart()`
+- `Logger.nodeExit()`
+
+#### debug Option
+- Outputs detailed error object information
+- Outputs debug messages and data
+- Enables graph state logging
+- Enables AI stream display under certain conditions
+
+Affects the following methods:
+- `Logger.error()` (error object output)
+- `Logger.debug()`
+- `Logger.graphState()`
+- `Logger._isStreamingVisibleForNode()` (indirect impact)
+
+#### aiStream Option
+- Controls whether to display AI streaming output for all nodes
+- Directly affects node model streaming display
+
+Affects the following method:
+- `Logger.nodeModelStreaming()`
+
+#### nodeStreamConfig / stream-nodes / hide-stream-nodes
+- Individually configures whether to display streaming for specific nodes
+- Takes precedence over global AI stream settings
+
+## Examples
+
+### Basic Usage
+
+```bash
+# Basic execution (minimal logging)
+codebot chat
+
+# Enable detailed logging
+codebot chat --verbose
+
+# Enable debug mode
+codebot chat --debug
+
+# Enable both detailed logging and debug mode
+codebot chat --verbose --debug
+```
+
+### AI Streaming Control
+
+```bash
+# Enable AI stream output for all nodes
+codebot chat --ai-stream
+
+# Show AI stream for specific nodes only
+codebot chat --stream-nodes translateInput,executeStep
+
+# Hide AI stream for specific nodes only
+codebot chat --ai-stream --hide-stream-nodes retrieveDocuments,summarizeResponse
+```
+
+### Enable AI Stream for All Nodes by Default
+
+To enable AI stream output for all nodes by default, you can use the following approaches:
+
+1. Modify configuration file:
+   - Open `~/.codebot/config.json` and add default logging settings:
+
+```json
+{
+  "providers": [...],
+  "defaultProvider": "...",
+  "language": "en",
+  "logging": {
+    "defaultAiStream": true,
+    "alwaysVisibleNodes": ["translateInput", "executeStep"]
+  }
+}
+```
+
+2. Modify code to apply settings before calling `Logger.configure()`:
+
+```typescript
+// In src/cli/index.ts
+// Get logging values from config file before Logger configuration
+const configManager = new ConfigManager();
+configManager.loadConfig();
+const loggingConfig = configManager.getLoggingConfig();
+
+// Configure Logger
+Logger.configure({
+  verbose: !!options.verbose,
+  debug: !!options.debug,
+  // Combine config file default with command line option
+  aiStream: loggingConfig?.defaultAiStream || !!options.aiStream,
+  graphState: !!options.debug,
+  tools: true,
+  nodeStreamConfig,
+  // Apply always visible nodes list from config file
+  alwaysVisibleNodes: loggingConfig?.alwaysVisibleNodes
+});
+```
+
+3. For temporary execution without changing config file:
+
+```bash
+# Enable AI stream output for all nodes in a single execution
+codebot chat --ai-stream
+
+# In special cases, using environment variable (one-time)
+CODEBOT_AI_STREAM=true codebot chat
+```
+
+## Applying Consistent Logging System
+
+### Identifying and Handling Code Not Using Logger
+
+The codebase may contain a mix of direct `console.log` usage and `Logger` class usage. Here's how to unify the approach:
+
+#### 1. Identify Existing console.log Calls
+
+Search for direct `console.log` calls across the project:
+
+```bash
+# Unix/Linux/macOS
+grep -r "console\.log" --include="*.ts" --include="*.js" ./src
+
+# Windows PowerShell
+Get-ChildItem -Path ./src -Include *.ts,*.js -Recurse | Select-String "console\.log"
+```
+
+#### 2. Add Logger Wrapper Functions
+
+Add utility functions to wrap console outputs with Logger:
+
+```typescript
+// src/utils/console-utils.ts
+import { Logger } from './logger.js';
+
+/**
+ * Function to wrap console.log with Logger
+ * @param message Message to log
+ * @param data Additional data
+ *
+ * Generated by Copilot
+ */
+export function logInfo(message: string, data?: any): void {
+  // Output directly to console, but include details only in verbose mode
+  console.log(message);
+  if (data && Logger.isVerbose()) {
+    console.log(data);
+  }
+
+  // Also record in logging system if needed
+  Logger.debug(`[INFO] ${message}`, data);
+}
+
+/**
+ * Function to wrap console.error with Logger
+ * @param message Error message
+ * @param error Error object
+ *
+ * Generated by Copilot
+ */
+export function logError(message: string, error?: any): void {
+  Logger.error(message, error);
+}
+```
+
+#### 3. Add isVerbose(), isDebug() Methods to Logger.ts
+
+```typescript
+// Add to src/utils/logger.ts
+/**
+ * Returns whether verbose mode is enabled
+ * @returns Whether verbose mode is enabled
+ *
+ * Generated by Copilot
+ */
+public static isVerbose(): boolean {
+  return Logger._config.verbose;
+}
+
+/**
+ * Returns whether debug mode is enabled
+ * @returns Whether debug mode is enabled
+ *
+ * Generated by Copilot
+ */
+public static isDebug(): boolean {
+  return Logger._config.debug;
+}
+```
+
+#### 4. Add ESLint Rules (Optional)
+
+Add ESLint rules to restrict direct console usage:
+
+```json
+// .eslintrc.json
+{
+  "rules": {
+    "no-console": ["warn", { "allow": ["warn"] }]
+  }
+}
+```
+
+#### 5. Migration Strategy
+
+Gradually replace direct `console.log` calls:
+
+1. Start with high-priority modules
+2. Always use `Logger` or wrapper functions in new code
+3. Update existing code as part of the refactoring process
+
+## Troubleshooting
+
+If logging options don't work as expected:
+
+1. Check current logging settings:
+   - The `debug` option also activates the `graphState` setting.
+   - The `verbose` option only activates basic progress logs and does not include detailed debug information.
+
+2. Node streaming visibility priority:
+   - Node-specific settings (`nodeStreamConfig`) > Always visible node list > Global AI stream setting / Debug mode
+
+3. If streaming output is not displayed:
+   - Check if the node is not included in `--hide-stream-nodes`
+   - Verify that the node name is correct
+   - Try activating the global AI stream option (`--ai-stream`) or debug mode (`--debug`)
+
+## Internal Implementation Reference
+
+Core configuration method of the `Logger` class:
+
+```typescript
+public static configure(config: LoggerConfig): void {
+  // Update while maintaining existing settings
+  Logger._config = {
+    ...Logger._config,
+    ...config,
+    // Merge nodeStreamConfig if provided
+    nodeStreamConfig: {
+      ...Logger._config.nodeStreamConfig,
+      ...(config.nodeStreamConfig || {})
+    },
+    // Overwrite if alwaysVisibleNodes is provided, otherwise keep existing value
+    alwaysVisibleNodes: config.alwaysVisibleNodes || Logger._config.alwaysVisibleNodes
+  };
+}
+```
+
+Method for determining streaming visibility:
+
+```typescript
+private static _isStreamingVisibleForNode(nodeName: string): boolean {
+  // 1. Apply node-specific setting if exists
+  if (nodeName in Logger._config.nodeStreamConfig) {
+    return Logger._config.nodeStreamConfig[nodeName];
+  }
+  // 2. Check if in always visible nodes list
+  if (Logger._config.alwaysVisibleNodes.includes(nodeName)) {
+    return true;
+  }
+  // 3. Otherwise determined by global AI stream setting or debug mode
+  return Boolean(Logger._config.aiStream || Logger._config.debug);
+}

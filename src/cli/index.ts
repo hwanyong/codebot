@@ -600,14 +600,20 @@ export function createCLI(): Command {
         });
       }
 
+      // 설정 파일에서 로깅 설정 가져오기
+      const loggingConfig = configManager.getLoggingConfig();
+
       // Logger 설정
       Logger.configure({
         verbose: !!options.verbose,
         debug: !!options.debug,
-        aiStream: !!options.aiStream,
+        // 명령줄 옵션이 우선, 그다음 설정 파일의 기본값 적용
+        aiStream: !!options.aiStream || !!loggingConfig?.defaultAiStream,
         graphState: !!options.debug,
         tools: true,
-        nodeStreamConfig
+        nodeStreamConfig,
+        // 설정 파일에 지정된 항상 표시할 노드 목록 적용
+        alwaysVisibleNodes: loggingConfig?.alwaysVisibleNodes
       });
 
       // 기본 Provider 가져오기
@@ -691,14 +697,20 @@ export function createCLI(): Command {
         });
       }
 
+      // 설정 파일에서 로깅 설정 가져오기
+      const loggingConfig = configManager.getLoggingConfig();
+
       // Logger 설정
       Logger.configure({
         verbose: !!options.verbose,
         debug: !!options.debug,
-        aiStream: !!options.aiStream,
+        // 명령줄 옵션이 우선, 그다음 설정 파일의 기본값 적용
+        aiStream: !!options.aiStream || !!loggingConfig?.defaultAiStream,
         graphState: !!options.debug,
         tools: true,
-        nodeStreamConfig
+        nodeStreamConfig,
+        // 설정 파일에 지정된 항상 표시할 노드 목록 적용
+        alwaysVisibleNodes: loggingConfig?.alwaysVisibleNodes
       });
 
       // 기본 Provider 가져오기
