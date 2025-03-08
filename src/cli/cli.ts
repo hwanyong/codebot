@@ -141,37 +141,37 @@ try {
   // Only apply to the chat command
   // 프로세스가 종료되지 않도록 이벤트 루프를 유지
   // chat 명령어가 실행된 경우에만 적용
-  if (process.argv.includes('chat')) {
-    debugLog("Chat command detected, setting up keepAliveTimer");
+  // if (process.argv.includes('chat')) {
+  //   debugLog("Chat command detected, setting up keepAliveTimer");
 
-    try {
-      // Simple timer to keep the event loop alive
-      // This timer doesn't actually do anything, but it keeps the event loop running
-      // 이벤트 루프를 유지하기 위한 간단한 타이머
-      // 이 타이머는 실제로 아무 작업도 수행하지 않지만, 이벤트 루프를 계속 유지함
-      const keepAliveTimer = setInterval(() => {
-        // Do nothing but log for debugging
-        debugLog("Keep-alive timer tick");
-      }, 60000); // Run every 60 seconds (60초마다 실행)
+  //   try {
+  //     // Simple timer to keep the event loop alive
+  //     // This timer doesn't actually do anything, but it keeps the event loop running
+  //     // 이벤트 루프를 유지하기 위한 간단한 타이머
+  //     // 이 타이머는 실제로 아무 작업도 수행하지 않지만, 이벤트 루프를 계속 유지함
+  //     const keepAliveTimer = setInterval(() => {
+  //       // Do nothing but log for debugging
+  //       debugLog("Keep-alive timer tick");
+  //     }, 60000); // Run every 60 seconds (60초마다 실행)
 
-      debugLog("Keep-alive timer created");
+  //     debugLog("Keep-alive timer created");
 
-      // Handle SIGINT (Ctrl+C) event for graceful exit
-      // SIGINT(Ctrl+C) 이벤트를 처리하여 정상적으로 종료
-      process.on('SIGINT', () => {
-        debugLog("SIGINT received, cleaning up");
-        clearInterval(keepAliveTimer);
-        debugLog("Exiting process");
-        process.exit(0);
-      });
+  //     // Handle SIGINT (Ctrl+C) event for graceful exit
+  //     // SIGINT(Ctrl+C) 이벤트를 처리하여 정상적으로 종료
+  //     process.on('SIGINT', () => {
+  //       debugLog("SIGINT received, cleaning up");
+  //       clearInterval(keepAliveTimer);
+  //       debugLog("Exiting process");
+  //       process.exit(0);
+  //     });
 
-      debugLog("SIGINT handler installed");
-    } catch (timerError: unknown) {
-      const errorMessage = timerError instanceof Error ? timerError.message : String(timerError);
-      debugLog(`Error setting up keep-alive timer: ${errorMessage}`);
-      throw timerError;
-    }
-  }
+  //     debugLog("SIGINT handler installed");
+  //   } catch (timerError: unknown) {
+  //     const errorMessage = timerError instanceof Error ? timerError.message : String(timerError);
+  //     debugLog(`Error setting up keep-alive timer: ${errorMessage}`);
+  //     throw timerError;
+  //   }
+  // }
 } catch (error: unknown) {
   console.error("Critical error during CLI startup:");
   console.error(error);

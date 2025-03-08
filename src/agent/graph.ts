@@ -108,31 +108,146 @@ builder
 // 그래프 컴파일
 export const codebotGraph = builder.compile();
 
-// Wrap the original invoke method to add logging
-// 원본 invoke 메소드를 래핑하여 로깅을 추가합니다
-const originalInvoke = codebotGraph.invoke;
+/**
+ * Creates a properly formatted error object for the context state
+ * 컨텍스트 상태에 맞게 적절히 포맷된 오류 객체를 생성합니다
+ *
+ * @param error - The error to format
+ * @returns A formatted error object conforming to ContextState.lastError type
+ */
+function formatErrorForContext(error: unknown): {
+  message: string;
+  timestamp: string;
+  type: string;
+  stack?: string;
+} {
+  const timestamp = new Date().toISOString();
 
-// 화살표 함수로 변경하여 this 컨텍스트 문제 해결
-codebotGraph.invoke = async (state: State, config?: any) => {
-  Logger.graphState('Graph Execution Started', {
-    executionStatus: state.context.executionStatus,
-    messageCount: state.messages.length
-  });
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      timestamp,
+      type: error.name || 'Error',
+      stack: error.stack
+    };
+  }
+
+  return {
+    message: String(error),
+    timestamp,
+    type: 'UnknownError'
+  };
+}
+
+/**
+ * Enhanced invoke method with safe debugging support
+ * 디버깅을 안전하게 지원하는 향상된 invoke 메소드
+ *
+ * @param state Current state (현재 상태)
+ * @param config Configuration options (설정 옵션)
+ * @returns Updated state (업데이트된 상태)
+ */
+const safeInvoke = async (state: State, config?: RunnableConfig): Promise<State> => {
+  // Early validation to prevent null/undefined errors
+  // null/undefined 오류를 방지하기 위한 초기 유효성 검사
+  if (!state) {
+    Logger.error('Invalid state provided to graph invoke');
+    throw new Error('Invalid state provided to graph invoke');
+  }
 
   try {
-    // 명시적으로 codebotGraph에 바인딩하여 this 문제 해결
-    const result = await originalInvoke.call(codebotGraph, state, config);
+    Logger.graphState('Graph Execution Started', {
+      executionStatus: state.context?.executionStatus || 'unknown',
+      messageCount: state.messages?.length || 0
+    });
+
+    // Use the original invoke method directly to avoid Symbol issues in debug mode
+    // 디버그 모드에서 Symbol 문제를 피하기 위해 원본 invoke 메소드를 직접 사용
+    const result = await (codebotGraph as any).wrapped_invoke?.(state, config) ||
+                   await (codebotGraph as any)._invoke?.(state, config) ||
+                   await (codebotGraph as any).invoke.original?.call(codebotGraph, state, config);
+
+    if (!result) {
+      Logger.error('Graph execution returned null or undefined result');
+      throw new Error('Graph execution failed with null result');
+    }
 
     Logger.graphState('Graph Execution Completed', {
-      executionStatus: result.context.executionStatus,
-      messageCount: result.messages.length,
-      currentStepIndex: result.context.currentStepIndex,
-      totalSteps: result.context.totalSteps
+      executionStatus: result.context?.executionStatus || 'unknown',
+      messageCount: result.messages?.length || 0,
+      currentStepIndex: result.context?.currentStepIndex,
+      totalSteps: result.context?.totalSteps
     });
 
     return result;
   } catch (error) {
+    // Handle errors during execution appropriately
+    // 실행 중 오류를 적절히 처리
     Logger.error('Error during graph execution', error);
+
+    // Create a safe error response state if possible
+    // 가능한 경우 안전한 오류 응답 상태 생성
+    if (state && state.context) {
+      state.context.executionStatus = 'error';
+      state.context.lastError = formatErrorForContext(error);
+      return state;
+    }
+
     throw error;
   }
 };
+
+// Store the original invoke method and replace it with our safe version
+// 원본 invoke 메소드를 저장하고 안전한 버전으로 교체
+const originalInvoke = codebotGraph.invoke;
+(codebotGraph as any).wrapped_invoke = originalInvoke;
+
+// Replace the invoke method with our safe version
+// 원래 invoke 메소드를 안전한 버전으로 교체
+codebotGraph.invoke = safeInvoke;
+
+// Preserve any util.inspect.custom symbols or other properties that might be present
+// util.inspect.custom 심볼이나 존재할 수 있는 다른 속성 보존
+const customInspectSymbol = Symbol.for('nodejs.util.inspect.custom');
+if (originalInvoke && typeof originalInvoke === 'object' && customInspectSymbol in originalInvoke) {
+  Object.defineProperty(codebotGraph.invoke, customInspectSymbol, {
+    enumerable: false,
+    configurable: true,
+    writable: true,
+    value: originalInvoke[customInspectSymbol]
+  });
+}
+
+// Copy over all other properties and symbols from the original invoke
+// 원본 invoke의 모든 다른 속성과 심볼을 복사
+if (originalInvoke) {
+  try {
+    const propertyNames = Object.getOwnPropertyNames(originalInvoke);
+    const propertySymbols = Object.getOwnPropertySymbols(originalInvoke);
+
+    // Copy all property names
+    for (const prop of propertyNames) {
+      if (prop !== 'name' && prop !== 'length' && prop !== 'prototype') {
+        try {
+          Object.defineProperty(codebotGraph.invoke, prop,
+            Object.getOwnPropertyDescriptor(originalInvoke, prop) || {});
+        } catch (e) {
+          // Silently continue if a property cannot be copied
+        }
+      }
+    }
+
+    // Copy all symbols
+    for (const sym of propertySymbols) {
+      try {
+        Object.defineProperty(codebotGraph.invoke, sym,
+          Object.getOwnPropertyDescriptor(originalInvoke, sym) || {});
+      } catch (e) {
+        // Silently continue if a symbol cannot be copied
+      }
+    }
+  } catch (e) {
+    // Fail silently if property copying fails
+    Logger.debug('Failed to copy properties from original invoke', e);
+  }
+}
