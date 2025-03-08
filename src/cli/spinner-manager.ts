@@ -2,6 +2,7 @@ import ora, { Ora } from 'ora';
 import { EventManager, NodeEventType, NodeEventData } from '../utils/events.js';
 import chalk from 'chalk';
 import { I18n } from '../config/i18n.js';
+import readline from 'readline';
 
 /**
  * CLI에서 스피너를 관리하는 클래스
@@ -15,14 +16,27 @@ export class SpinnerManager {
   private _i18n: I18n;
   private _isModelStreaming = false;
   private _currentNode = '';
+  private _readlineInterface: readline.Interface | null = null;
+  private _originalStdinRawMode: boolean | undefined = undefined;
+  private _originalIsRaw: boolean | undefined = undefined;
 
   /**
    * SpinnerManager 생성자
+   * @param readlineInterface 선택적 readline 인터페이스
    */
-  constructor() {
+  constructor(readlineInterface?: readline.Interface) {
     this._eventManager = EventManager.getInstance();
     this._i18n = I18n.getInstance();
+    this._readlineInterface = readlineInterface || null;
     this._registerEventHandlers();
+  }
+
+  /**
+   * Readline 인터페이스 설정
+   * @param readlineInterface readline 인터페이스
+   */
+  public setReadlineInterface(readlineInterface: readline.Interface): void {
+    this._readlineInterface = readlineInterface;
   }
 
   /**
@@ -36,6 +50,51 @@ export class SpinnerManager {
     this._eventManager.on(NodeEventType.MODEL_STREAMING, this._handleModelStreaming.bind(this));
     this._eventManager.on(NodeEventType.MODEL_END, this._handleModelEnd.bind(this));
     this._eventManager.on(NodeEventType.ERROR, this._handleError.bind(this));
+  }
+
+  /**
+   * 터미널 상태 저장
+   * 모델 스트리밍 시작 전 터미널 상태를 저장합니다.
+   */
+  private _saveTerminalState(): void {
+    try {
+      // stdin이 TTY인 경우에만 raw 모드 상태를 저장
+      if (process.stdin.isTTY) {
+        this._originalStdinRawMode = process.stdin.isRaw;
+      }
+    } catch (error) {
+      // 상태 저장 실패 시 조용히 무시
+    }
+  }
+
+  /**
+   * 터미널 상태 복원
+   * 모델 스트리밍 종료 후 터미널 상태를 복원합니다.
+   */
+  private _restoreTerminalState(): void {
+    try {
+      // stdin이 TTY이고 저장된 상태가 있는 경우에만 복원
+      if (process.stdin.isTTY && this._originalStdinRawMode !== undefined) {
+        if (this._originalStdinRawMode === false) {
+          // 원래 raw 모드가 아니었다면, setRawMode(false)를 호출하여 canonical 모드로 복원
+          process.stdin.setRawMode(false);
+        }
+      }
+
+      // readline 인터페이스가 있으면 커서 위치를 조정하고 프롬프트를 다시 표시
+      if (this._readlineInterface) {
+        this._readlineInterface.write('\n');
+
+        // 필요한 경우 readline 내부 상태 재설정 시도
+        try {
+          this._readlineInterface.write('');
+        } catch (error) {
+          // 오류 무시
+        }
+      }
+    } catch (error) {
+      // 상태 복원 실패 시 조용히 무시
+    }
   }
 
   /**
@@ -105,11 +164,15 @@ export class SpinnerManager {
       this._spinner.stop();
       console.log(chalk.magenta(`\n--- ${this._i18n.t('model_streaming_start')} ---`));
       this._isModelStreaming = true;
+
+      // 스트리밍 시작 시 터미널 상태 저장
+      this._saveTerminalState();
     }
 
     // 스트리밍 콘텐츠 출력 - 이제 이벤트 시스템에서 미리 필터링된 내용만 받아옴
     // 결과적으로 logger.ts의 nodeModelStreaming에서 설정된 노드별 가시성 설정이 여기에도 자동으로 적용됨
     if (this._isModelStreaming && data.payload?.content) {
+      // 직접 stdout에 쓰기 - 터미널 모드에 영향을 줄 수 있음
       process.stdout.write(data.payload.content);
     }
   }
@@ -124,11 +187,24 @@ export class SpinnerManager {
       console.log(chalk.magenta(`\n--- ${this._i18n.t('model_streaming_end')} ---`));
       this._isModelStreaming = false;
 
+      // 터미널 상태 복원
+      this._restoreTerminalState();
+
       // 노드 처리 계속을 위한 새 스피너
       this._spinner = ora({
         text: this._i18n.t('node_processing', this._currentNode),
         color: 'blue'
       }).start();
+
+      // 명시적으로 readline 인터페이스를 재활성화하기 위해 setTimeout 사용
+      if (this._readlineInterface) {
+        setTimeout(() => {
+          if (this._readlineInterface) {
+            // 넥스트 틱에서 프롬프트 표시
+            this._readlineInterface.prompt(true);
+          }
+        }, 10);
+      }
     }
   }
 
@@ -141,6 +217,9 @@ export class SpinnerManager {
     if (this._isModelStreaming) {
       console.log(chalk.red(`\n--- ${this._i18n.t('model_streaming_error')} ---`));
       this._isModelStreaming = false;
+
+      // 오류 발생 시에도 터미널 상태 복원
+      this._restoreTerminalState();
     }
 
     // 스피너가 있다면 오류 표시
@@ -163,6 +242,12 @@ export class SpinnerManager {
       this._spinner = null;
     }
 
+    // 스트리밍 모드였다면 터미널 상태 복원
+    if (this._isModelStreaming) {
+      this._restoreTerminalState();
+      this._isModelStreaming = false;
+    }
+
     // 이벤트 핸들러 해제
     this._eventManager.off(NodeEventType.START, this._handleNodeStart.bind(this));
     this._eventManager.off(NodeEventType.END, this._handleNodeEnd.bind(this));
@@ -170,5 +255,8 @@ export class SpinnerManager {
     this._eventManager.off(NodeEventType.MODEL_STREAMING, this._handleModelStreaming.bind(this));
     this._eventManager.off(NodeEventType.MODEL_END, this._handleModelEnd.bind(this));
     this._eventManager.off(NodeEventType.ERROR, this._handleError.bind(this));
+
+    // readline 인터페이스 참조 해제
+    this._readlineInterface = null;
   }
 }

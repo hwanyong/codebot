@@ -44,7 +44,7 @@ export async function nodeTranslateInput(state: State): Promise<Update> {
   // Create translation prompt
   // 번역 프롬프트 생성
   Logger.nodeAction('translateInput', 'Creating translation prompt');
-  const translatePrompt = ChatPromptTemplate.fromTemplate(TRANSLATE_INPUT_PROMPT);
+  // const translatePrompt = ChatPromptTemplate.fromTemplate(TRANSLATE_INPUT_PROMPT);
 
   // Model call configuration
   // 모델 호출 설정

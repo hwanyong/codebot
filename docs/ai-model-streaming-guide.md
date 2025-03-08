@@ -16,7 +16,7 @@ The standard pattern for AI model streaming consists of the following steps:
 AI 모델 스트리밍의 표준 패턴은 다음 단계로 구성됩니다:
 
 1. Initialize node entry with `Logger.nodeEntry`
-2. Configure model call with appropriate parameters 
+2. Configure model call with appropriate parameters
 3. Signal streaming start with `Logger.nodeModelStart`
 4. Stream model output using the model's streaming capability
 5. Process each chunk and log with `Logger.nodeModelStreaming`
@@ -36,17 +36,17 @@ import { Logger } from '../../utils/logger.js';
 async function processWithModelStreaming(input: string, model: any, config: any): Promise<string> {
   // 1. Log node entry
   Logger.nodeEntry('nodeName');
-  
+
   try {
     // 2. Prepare prompt and configuration
     const promptValue = [/* your prompt structure */];
-    
+
     // 3. Signal model streaming start
     Logger.nodeModelStart('nodeName', 'Starting model streaming');
-    
+
     // 4. Stream model response
     const stream = await model.stream(promptValue, config);
-    
+
     // 5. Process and log each chunk
     let accumulatedText = '';
     for await (const chunk of stream) {
@@ -57,15 +57,15 @@ async function processWithModelStreaming(input: string, model: any, config: any)
       // Log each chunk for streaming visualization
       Logger.nodeModelStreaming('nodeName', content);
     }
-    
+
     // 6. Signal model streaming end
     Logger.nodeModelEnd('nodeName');
-    
+
     // 7. Process final output and exit node
     const processedOutput = postProcessOutput(accumulatedText);
     Logger.nodeAction('nodeName', 'Processing completed');
     Logger.nodeExit('nodeName');
-    
+
     return processedOutput;
   } catch (error) {
     // Handle errors properly
@@ -90,9 +90,9 @@ The `Logger` class provides several ways to control streaming visibility:
 
 `Logger` 클래스는 스트리밍 가시성을 제어하는 여러 방법을 제공합니다:
 
-1. **Global Configuration**: 
+1. **Global Configuration**:
    ```typescript
-   Logger.configure({ 
+   Logger.configure({
      debug: true,     // Enable all debug logs
      aiStream: true,  // Enable all AI streaming logs
    });
@@ -102,7 +102,7 @@ The `Logger` class provides several ways to control streaming visibility:
    ```typescript
    // Set a specific node to always show streaming
    Logger.setNodeStreamVisibility('nodeName', true);
-   
+
    // Set multiple nodes at once
    Logger.setNodeStreamConfig({
      'nodeName1': true,

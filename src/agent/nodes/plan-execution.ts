@@ -22,6 +22,7 @@ export async function nodePlanExecution(state: State): Promise<Update> {
   // Get task analysis
   // 태스크 분석 가져오기
   const taskAnalysis = state.context.currentTask;
+  // const lastMessage = state.messages[state.messages.length - 1];
 
   if (!taskAnalysis) {
     Logger.error('No task analysis result available');
@@ -63,6 +64,9 @@ export async function nodePlanExecution(state: State): Promise<Update> {
   // Create planning prompt
   // 계획 실행 프롬프트 생성
   Logger.nodeAction('planExecution', 'Creating planning prompt');
+  // const planningPrompt = ChatPromptTemplate.fromMessages([
+  //   ["system", PLANNING_PROMPT]
+  // ]);
   const planningPrompt = ChatPromptTemplate.fromTemplate(PLANNING_PROMPT);
 
   // Render prompt

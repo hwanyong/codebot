@@ -45,60 +45,109 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
 
   // Promise를 반환하여 readline 인터페이스가 닫힐 때까지 완료되지 않도록 함
   return new Promise<void>((resolve) => {
-    // 읽기/쓰기 인터페이스 생성
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      prompt: chalk.green('> ')
-    });
+    // 읽기/쓰기 인터페이스 생성 함수
+    const createReadlineInterface = () => {
+      return readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        prompt: chalk.green('> ')
+      });
+    };
+
+    // 초기 readline 인터페이스 생성
+    let rl = createReadlineInterface();
 
     console.log(chalk.magenta(i18n.t('welcome')));
     console.log(chalk.gray(i18n.t('current_directory', process.cwd())));
 
+    // 스피너 관리자에 readline 인터페이스 설정
+    spinnerManager.setReadlineInterface(rl);
+
     rl.prompt();
 
-    rl.on('line', async (line) => {
-      // 슬래시 명령어 처리
-      if (line.startsWith('/')) {
-        await handleSlashCommand(line, rl);
-        return;
-      }
-
-      // 빈 입력 처리
-      if (line.trim() === '') {
-        rl.prompt();
-        return;
-      }
-
-      try {
-        // 에이전트 실행 - 스피너는 이벤트에 따라 자동으로 관리됨
-        const response = await agentManager.run(line);
-
-        // 응답 표시 - 스피너는 자동으로 닫힘
-        console.log(chalk.blue('Codebot: ') + response);
-      } catch (error: any) {
-        // 오류 처리는 이벤트 시스템에서 자동으로 처리
-        // 추가적인 오류 정보가 필요한 경우에만 표시
-        if (process.env.DEBUG) {
-          console.error(error);
+    // 이벤트 핸들러를 설정하는 함수
+    const setupEventHandlers = (interface: readline.Interface) => {
+      interface.on('line', async (line) => {
+        // 슬래시 명령어 처리
+        if (line.startsWith('/')) {
+          await handleSlashCommand(line, interface);
+          return;
         }
 
-        // 오류 발생 후에도 세션 유지
-        console.log(chalk.yellow(i18n.t('session_continued')));
-      }
+        // 빈 입력 처리
+        if (line.trim() === '') {
+          interface.prompt();
+          return;
+        }
 
-      rl.prompt();
-    });
+        try {
+          // 에이전트 실행 전 현재 readline 인터페이스 비활성화
+          interface.pause();
 
-    // readline 인터페이스가 닫힐 때 이벤트 처리
-    rl.on('close', () => {
-      // 스피너 관리자 정리
-      spinnerManager.cleanup();
+          // 에이전트 실행 - 스피너는 이벤트에 따라 자동으로 관리됨
+          const response = await agentManager.run(line);
 
-      console.log(chalk.green(i18n.t('goodbye')));
-      // Promise 해결
-      resolve();
-    });
+          // 응답 표시 - 스피너는 자동으로 닫힘
+
+          // 에이전트 실행 후 readline 인터페이스 완전 재생성
+          interface.close();
+
+          // TTY 상태가 완전히 초기화될 수 있도록 약간의 지연 추가
+          setTimeout(() => {
+            // 새 readline 인터페이스 생성
+            rl = createReadlineInterface();
+
+            // 새 인터페이스에 이벤트 핸들러 설정
+            setupEventHandlers(rl);
+
+            // 스피너 관리자에 새 readline 인터페이스 설정
+            spinnerManager.setReadlineInterface(rl);
+
+            // 프롬프트 표시
+            rl.prompt();
+          }, 100);
+        } catch (error: any) {
+          // 오류 처리는 이벤트 시스템에서 자동으로 처리
+          // 추가적인 오류 정보가 필요한 경우에만 표시
+          if (process.env.DEBUG) {
+            console.error(error);
+          }
+
+          // 오류 발생 후에도 세션 유지
+          console.log(chalk.yellow(i18n.t('session_continued')));
+
+          // 에이전트 실행 오류 후에도 readline 인터페이스 완전 재생성
+          interface.close();
+
+          setTimeout(() => {
+            // 새 readline 인터페이스 생성
+            rl = createReadlineInterface();
+
+            // 새 인터페이스에 이벤트 핸들러 설정
+            setupEventHandlers(rl);
+
+            // 스피너 관리자에 새 readline 인터페이스 설정
+            spinnerManager.setReadlineInterface(rl);
+
+            // 프롬프트 표시
+            rl.prompt();
+          }, 100);
+        }
+      });
+
+      // readline 인터페이스가 닫힐 때 이벤트 처리
+      interface.on('close', () => {
+        // 스피너 관리자 정리
+        spinnerManager.cleanup();
+
+        console.log(chalk.green(i18n.t('goodbye')));
+        // Promise 해결
+        resolve();
+      });
+    };
+
+    // 초기 인터페이스에 이벤트 핸들러 설정
+    setupEventHandlers(rl);
 
     // SIGINT(Ctrl+C) 이벤트를 처리하여 정상적으로 종료
     process.on('SIGINT', () => {
@@ -413,6 +462,43 @@ async function getProjectInfo(): Promise<Record<string, any>> {
   }
 
   return info;
+}
+
+/**
+ * 터미널 상태를 재설정합니다.
+ * @param rl Readline 인터페이스
+ */
+function resetTerminalState(rl: readline.Interface): void {
+  try {
+    if (process.stdin.isTTY) {
+      // raw 모드가 활성화되어 있다면 비활성화
+      if (process.stdin.isRaw) {
+        process.stdin.setRawMode(false);
+      }
+
+      // 그리고 다시 raw 모드를 활성화했다가 비활성화하여 상태를 완전히 리셋
+      process.stdin.setRawMode(true);
+      process.stdin.setRawMode(false);
+    }
+
+    // readline 인터페이스 내부 상태를 재설정하기 위한 시도
+    // 아래 코드는 readline 내부 구현에 의존하므로 주의가 필요함
+    try {
+      // @ts-ignore - _refreshLine은 내부 메서드지만 여기서는 필요함
+      if (typeof rl._refreshLine === 'function') {
+        // @ts-ignore
+        rl._refreshLine();
+      }
+
+      // cursor 위치 재조정
+      rl.write('');
+    } catch (e) {
+      // 내부 메서드 호출 실패는 무시
+    }
+  } catch (error) {
+    // 터미널 상태 재설정 실패 시 조용히 무시
+    // 에러를 출력하면 보안이나 UX에 영향을 줄 수 있음
+  }
 }
 
 /**

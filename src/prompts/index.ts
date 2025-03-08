@@ -46,8 +46,12 @@ Analyze this request and categorize it. First, determine if this is a simple res
 If it's a simple response query:
 - Set task_type to "simple_response"
 - You can leave subtasks empty or provide a minimal structure
+- Ensure it's a simple response query that doesn't require tools
+- If it's not a simple question, then this is not a simple_response
 
 If it requires tools or complex execution:
+- If file creation or editing is needed
+- If file content needs to be analyzed
 - Determine the appropriate task_type
 - Break it down into subtasks
 - For each subtask, determine what needs to be done, what tools might be needed, and dependencies
@@ -77,8 +81,13 @@ Respond in JSON format:
 단순한 응답 쿼리인 경우:
 - task_type을 "simple_response"로 설정하세요
 - subtasks는 비워두거나 최소한의 구조만 제공하세요
+- 도구가 필요 없는 단순한 응답 쿼리인지 확인하세요
+- 단순 질문이 아니라면 이것은 simple_response가 아닙니다
 
 도구나 복잡한 실행이 필요한 경우:
+- 파일 생성 혹은 편집이 필요한 경우
+- 파일 내용을 분석해야 하는 경우
+- 파일 확인 및 준비가 필요할 수 있습니다. 프로젝트를 전체 분석한 뒤 적절한 조치를 결정하세요.
 - 적절한 task_type을 결정하세요
 - 하위 작업으로 분류하세요
 - 각 하위 작업에 대해 무엇을 해야 하는지, 어떤 도구가 필요할 수 있는지, 의존성을 결정하세요
@@ -114,17 +123,17 @@ Create a step-by-step plan to perform these tasks. For each step, specify:
 3. How to validate the results
 
 Respond in JSON format:
-{
+{{
   "plan": [
-    {
+    {{
       "step_id": "1",
       "action": "...",
       "tool": "...",
-      "tool_inputs": {...},
+      "tool_inputs": {{...}},
       "validation": "..."
-    }
+    }}
   ]
-}`;
+}}`;
 /* 한국어 번역:
 당신은 Codebot, 전문 코딩 어시스턴트입니다.
 당신의 임무는 다음 작업을 수행하기 위한 상세한 계획을 만드는 것입니다:
@@ -165,13 +174,13 @@ Available Tools:
 {available_tools}
 
 Execute this step and report the results. If you need to use a tool, specify the tool call in the following format:
-{
+{{
   "tool": "tool_name",
-  "input": {
+  "input": {{
     "parameter1": "value1",
     "parameter2": "value2"
-  }
-}
+  }}
+}}
 
 After receiving the tool call results, analyze the results and determine the next steps.`;
 /* 한국어 번역:
@@ -215,25 +224,25 @@ Verify these results and determine:
 3. Whether additional steps are needed
 
 Respond in JSON format:
-{
+{{
   "success": true/false,
   "errors": [
-    {
+    {{
       "step_id": "...",
       "error": "...",
       "resolution": "..."
-    }
+    }}
   ],
   "additional_steps": [
-    {
+    {{
       "step_id": "...",
       "action": "...",
       "tool": "...",
-      "tool_inputs": {...},
+      "tool_inputs": {{...}},
       "validation": "..."
-    }
+    }}
   ]
-}`;
+}}`;
 /* 한국어 번역:
 당신은 Codebot, 전문 코딩 어시스턴트입니다.
 당신의 임무는 실행 결과를 검증하고 오류를 처리하는 것입니다:
@@ -334,12 +343,12 @@ Analyze this error and determine:
 3. A clear explanation to provide to the user
 
 Respond in JSON format:
-{
+{{
   "error_type": "...",
   "cause": "...",
   "resolution": "...",
   "user_message": "..."
-}`;
+}}`;
 /* 한국어 번역:
 당신은 Codebot, 전문 코딩 어시스턴트입니다.
 당신의 임무는 발생한 오류를 처리하는 것입니다:
