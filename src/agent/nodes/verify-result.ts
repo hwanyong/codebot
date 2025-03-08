@@ -18,49 +18,85 @@ import { Logger } from '../../utils/logger.js';
 export async function nodeVerifyResult(state: State): Promise<Update> {
   Logger.nodeEntry('verifyResult');
 
-  // Get execution results and plan
-  // 실행 결과 및 계획 가져오기
-  const { executionResults, executionPlan } = state.context;
-
-  if (!executionResults || !executionPlan) {
-    Logger.error('Missing execution results or plan for verification');
-    Logger.nodeExit('verifyResult', 'error');
-
-    return {
-      context: {
-        ...state.context,
-        lastError: {
-          message: 'No execution results to verify.',
-          timestamp: new Date().toISOString(),
-          type: 'MissingResults',
-          stack: undefined
-        },
-        executionStatus: 'error'
-      } as any
-    };
-  }
-
-  // Create result verification prompt
-  // 결과 검증 프롬프트 생성
-  Logger.nodeAction('verifyResult', 'Creating verification prompt');
-  const verifyResultPrompt = ChatPromptTemplate.fromTemplate(VERIFY_RESULT_PROMPT);
-
-  // Render prompt
-  // 프롬프트 렌더링
-  const promptValue = await verifyResultPrompt.formatMessages({
-    execution_results: JSON.stringify(executionResults, null, 2),
-    original_plan: JSON.stringify(executionPlan, null, 2)
-  });
-
-  // Model call configuration
-  // 모델 호출 설정
-  const config: RunnableConfig = {
-    configurable: {
-      model: state.context.model
-    }
-  };
-
   try {
+    // 입력 검증: 실행 결과와 계획이 있는지 확인
+    // Input validation: Check if execution results and plan exist
+    const { executionResults, executionPlan } = state.context;
+    if (!executionResults || !executionPlan) {
+      Logger.error('Missing execution results or plan for verification');
+      Logger.nodeExit('verifyResult', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'No execution results or plan to verify.',
+            timestamp: new Date().toISOString(),
+            type: 'MissingResults',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
+    // 실행 결과가 배열인지 확인하고 내용이 있는지 검증
+    // Verify execution results is an array and has content
+    if (!Array.isArray(executionResults) || executionResults.length === 0) {
+      Logger.error('Execution results are empty or invalid');
+      Logger.nodeExit('verifyResult', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Execution results are empty or in an invalid format.',
+            timestamp: new Date().toISOString(),
+            type: 'InvalidResults',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
+    // 모델 검증: 모델이 설정되어 있는지 확인
+    // Validate model: Check if model is configured
+    if (!state.context.model) {
+      Logger.error('Model is not configured');
+      Logger.nodeExit('verifyResult', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Language model is not configured.',
+            timestamp: new Date().toISOString(),
+            type: 'ConfigError',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
+    // Create result verification prompt
+    // 결과 검증 프롬프트 생성
+    Logger.nodeAction('verifyResult', 'Creating verification prompt');
+    const verifyResultPrompt = ChatPromptTemplate.fromTemplate(VERIFY_RESULT_PROMPT);
+
+    // Render prompt
+    // 프롬프트 렌더링
+    const promptValue = await verifyResultPrompt.formatMessages({
+      execution_results: JSON.stringify(executionResults, null, 2),
+      original_plan: JSON.stringify(executionPlan, null, 2)
+    });
+
+    // Model call configuration
+    // 모델 호출 설정
+    const config: RunnableConfig = {
+      configurable: {
+        model: state.context.model
+      }
+    };
+
     // Call model with streaming
     // 스트리밍으로 모델 호출
     Logger.nodeAction('verifyResult', 'Calling model for verification');
@@ -82,6 +118,25 @@ export async function nodeVerifyResult(state: State): Promise<Update> {
       }
     }
 
+    // 응답 검증: 결과 내용이 존재하는지 확인
+    // Validate response: Check if result content exists
+    if (!resultContent.trim()) {
+      Logger.error('Empty response from model');
+      Logger.nodeExit('verifyResult', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Received empty response from language model.',
+            timestamp: new Date().toISOString(),
+            type: 'ModelError',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
     // 모델 응답 완료 이벤트 발생
     Logger.nodeModelEnd('verifyResult');
 
@@ -96,15 +151,22 @@ export async function nodeVerifyResult(state: State): Promise<Update> {
       } else {
         verificationReport = JSON.parse(resultContent);
       }
+
+      // 결과 검증: 필수 필드 확인
+      // Validate result: Check required fields
+      if (verificationReport.success === undefined) {
+        throw new Error('Invalid verification report format. Missing required fields.');
+      }
+
       Logger.graphState('Verification Report', verificationReport);
-    } catch (error) {
+    } catch (error: any) {
       Logger.error('Failed to parse verification result', error);
       Logger.nodeExit('verifyResult', 'error');
       return {
         context: {
           ...state.context,
           lastError: {
-            message: 'Unable to parse verification result.',
+            message: `Unable to parse verification result: ${error.message}`,
             timestamp: new Date().toISOString(),
             type: 'ParseError',
             stack: error instanceof Error ? error.stack : undefined
@@ -120,16 +182,36 @@ export async function nodeVerifyResult(state: State): Promise<Update> {
       Logger.nodeAction('verifyResult',
         `Verification detected need for additional steps: ${verificationReport.additional_steps.length}`);
 
+      // 추가 단계 검증: 형식 확인
+      // Validate additional steps format
+      const invalidStep = verificationReport.additional_steps.find(
+        (step: any) => !step.step_id || !step.description || !step.tool
+      );
+
+      if (invalidStep) {
+        Logger.error('Invalid format for additional step', invalidStep);
+        return {
+          context: {
+            ...state.context,
+            lastError: {
+              message: 'Invalid format for additional step in verification report',
+              timestamp: new Date().toISOString(),
+              type: 'InvalidVerificationFormat',
+              stack: undefined
+            },
+            executionStatus: 'error'
+          } as any
+        };
+      }
+
       // Add additional steps to execution plan
       // 실행 계획에 추가 단계 추가
       const updatedPlan = {
         ...executionPlan,
         plan: [...executionPlan.plan, ...verificationReport.additional_steps]
       };
-
       Logger.nodeAction('verifyResult', `Updated plan with ${updatedPlan.plan.length} total steps`);
       Logger.nodeExit('verifyResult');
-
       return {
         messages: [new AIMessage(resultContent)],
         context: {
@@ -148,7 +230,6 @@ export async function nodeVerifyResult(state: State): Promise<Update> {
     Logger.nodeAction('verifyResult',
       `Verification complete: ${verificationReport.success ? 'Success' : 'Failed'}`);
     Logger.nodeExit('verifyResult');
-
     return {
       messages: [new AIMessage(resultContent)],
       context: {
@@ -158,9 +239,25 @@ export async function nodeVerifyResult(state: State): Promise<Update> {
         executionStatus: verificationReport.success ? 'completed' : 'error'
       } as any
     };
-  } catch (error) {
-    Logger.error('Error in result verification', error);
+  } catch (error: any) {
+    // 예상치 못한 오류 처리
+    // Handle unexpected errors
+    Logger.error('Unexpected error in result verification', error);
     Logger.nodeExit('verifyResult', 'error');
-    throw error;
+
+    // 오류 발생 시 즉시 중단하고 오류 상태로 전환
+    // Stop immediately when an error occurs and change to error status
+    return {
+      context: {
+        ...state.context,
+        lastError: {
+          message: error.message || 'Unknown error occurred during result verification',
+          timestamp: new Date().toISOString(),
+          type: 'UnexpectedError',
+          stack: error.stack
+        },
+        executionStatus: 'error'
+      } as any
+    };
   }
 }

@@ -21,31 +21,66 @@ import { Logger } from '../../utils/logger.js';
 export async function nodeGenerateResponse(state: State): Promise<Update> {
   Logger.nodeEntry('generateResponse');
 
-  // Input validation
-  if (!state || !state.context || !state.messages || state.messages.length === 0) {
-    Logger.error('Invalid state for response generation');
-    Logger.nodeExit('generateResponse', 'error');
-
-    return {
-      context: {
-        ...state.context,
-        lastError: {
-          message: 'Invalid state for response generation.',
-          timestamp: new Date().toISOString(),
-          type: 'InvalidState',
-          stack: undefined
-        },
-        executionStatus: 'error'
-      } as any
-    };
-  }
-
-  // Get original request and task analysis
-  // 원래 요청 및 작업 분석 가져오기
-  const { executionResults, verificationReport, directResponse, currentTask } = state.context;
-  const originalRequest = state.messages[0].content;
-
   try {
+    // 입력 검증: 상태가 유효한지 확인
+    // Input validation: Check if state is valid
+    if (!state || !state.context || !state.messages || state.messages.length === 0) {
+      Logger.error('Invalid state for response generation');
+      Logger.nodeExit('generateResponse', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Invalid state for response generation.',
+            timestamp: new Date().toISOString(),
+            type: 'InvalidState',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
+    // 모델 검증: 모델이 설정되어 있는지 확인
+    // Validate model: Check if model is configured
+    if (!state.context.model) {
+      Logger.error('Model is not configured');
+      Logger.nodeExit('generateResponse', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Language model is not configured.',
+            timestamp: new Date().toISOString(),
+            type: 'ConfigError',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
+    // Get original request and task analysis
+    // 원래 요청 및 작업 분석 가져오기
+    const { executionResults, verificationReport, directResponse, currentTask } = state.context;
+    const originalRequest = state.messages[0].content;
+
+    if (!originalRequest) {
+      Logger.error('Original request is missing or empty');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Original request is missing or empty.',
+            timestamp: new Date().toISOString(),
+            type: 'MissingRequest',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
     // Determine prompt template and parameters based on response type
     let promptTemplate: string;
     let promptParams: Record<string, any>;
@@ -54,9 +89,26 @@ export async function nodeGenerateResponse(state: State): Promise<Update> {
     // Check if this is a direct response case (early return pattern for branching logic)
     // 직접 응답 케이스인지 확인 (분기 로직에 대한 조기 반환 패턴)
     if (directResponse === true) {
+      // 직접 응답의 경우 currentTask 값 검증
+      // Validate currentTask value for direct response
+      if (!currentTask) {
+        Logger.error('Current task is missing for direct response');
+        return {
+          context: {
+            ...state.context,
+            lastError: {
+              message: 'Current task is missing for direct response.',
+              timestamp: new Date().toISOString(),
+              type: 'MissingTask',
+              stack: undefined
+            },
+            executionStatus: 'error'
+          } as any
+        };
+      }
+
       // Use direct response prompt for simple responses
       Logger.nodeAction('generateResponse', 'Creating direct response prompt for simple response');
-
       promptTemplate = DIRECT_RESPONSE_PROMPT;
       promptParams = {
         original_request: originalRequest,
@@ -64,9 +116,26 @@ export async function nodeGenerateResponse(state: State): Promise<Update> {
       };
       logMessage = 'Direct response generated successfully';
     } else {
+      // 도구 기반 응답의 경우 executionResults 값 검증
+      // Validate executionResults value for tool-based response
+      if (!executionResults || !Array.isArray(executionResults)) {
+        Logger.error('Execution results are missing or invalid for standard response');
+        return {
+          context: {
+            ...state.context,
+            lastError: {
+              message: 'Execution results are missing or invalid for standard response.',
+              timestamp: new Date().toISOString(),
+              type: 'MissingResults',
+              stack: undefined
+            },
+            executionStatus: 'error'
+          } as any
+        };
+      }
+
       // Use standard response generation prompt for tool-based responses
       Logger.nodeAction('generateResponse', 'Creating standard response generation prompt');
-
       promptTemplate = GENERATE_RESPONSE_PROMPT;
       promptParams = {
         original_request: originalRequest,
@@ -91,55 +160,71 @@ export async function nodeGenerateResponse(state: State): Promise<Update> {
 
     // Call model
     Logger.nodeAction('generateResponse', `Calling model for ${directResponse ? 'direct' : 'standard'} response generation`);
-    Logger.nodeModelStart('translateInput', 'Starting model streaming for translation');
-    // const result = await state.context.model.invoke(promptValue, config);
-    const stream = await state.context.model.stream(promptValue, config);
-    // Logger.nodeAction('generateResponse', logMessage);
+    Logger.nodeModelStart('generateResponse', 'Starting model streaming for response generation');
 
+    // Stream response using the model's streaming capability
+    const stream = await state.context.model.stream(promptValue, config);
+
+    // Collect the full response while streaming individual tokens
     let generatedResponse = '';
     for await (const chunk of stream) {
       const content = chunk.content;
       if (content) {
         generatedResponse += content;
+        // Log model streaming events
+        Logger.nodeModelStreaming('generateResponse', content);
       }
-      // Log model streaming events
-      Logger.nodeModelStreaming('generateResponse', content);
     }
+
+    // 응답 검증: 결과 내용이 존재하는지 확인
+    // Validate response: Check if result content exists
+    if (!generatedResponse.trim()) {
+      Logger.error('Empty response from model');
+      Logger.nodeExit('generateResponse', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Received empty response from language model.',
+            timestamp: new Date().toISOString(),
+            type: 'ModelError',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
     // Log model end event
     Logger.nodeModelEnd('generateResponse');
+    Logger.nodeAction('generateResponse', logMessage);
 
     // Return final response
     Logger.nodeExit('generateResponse');
-
     return {
       messages: [new AIMessage(generatedResponse)],
       context: {
         ...state.context,
         executionStatus: 'completed'
       } as any
-    }
-
-    // return {
-    //   messages: [new AIMessage(result.content as string)],
-    //   context: {
-    //     ...state.context,
-    //     executionStatus: 'completed'
-    //   } as any
-    // };
-  } catch (error) {
-    // Provide contextual error information
-    const errorType = directResponse ? 'direct' : 'standard';
-    Logger.error(`Error generating ${errorType} response`, error);
+    };
+  } catch (error: any) {
+    // 예상치 못한 오류 처리
+    // Handle unexpected errors
+    const errorType = state.context.directResponse ? 'direct' : 'standard';
+    Logger.error(`Unexpected error in ${errorType} response generation`, error);
     Logger.nodeExit('generateResponse', 'error');
 
+    // 오류 발생 시 즉시 중단하고 오류 상태로 전환
+    // Stop immediately when an error occurs and change to error status
     return {
       context: {
         ...state.context,
         lastError: {
-          message: `Unable to generate ${errorType} response.`,
+          message: error.message || `Unable to generate ${errorType} response.`,
           timestamp: new Date().toISOString(),
           type: 'ResponseGenerationError',
-          stack: error instanceof Error ? error.stack : undefined
+          stack: error.stack
         },
         executionStatus: 'error'
       } as any

@@ -18,63 +18,60 @@ import { Logger } from '../../utils/logger.js';
  */
 export async function nodeExecuteStep(state: State): Promise<Update> {
   Logger.nodeEntry('executeStep');
-
-  // Get execution plan and current step
-  // 실행 계획 및 현재 단계 가져오기
-  const { executionPlan, currentStepIndex, totalSteps } = state.context;
-
-  if (!executionPlan || currentStepIndex === undefined || currentStepIndex >= (totalSteps ?? 0)) {
-    Logger.error(`Invalid execution state: plan=${!!executionPlan}, currentStepIndex=${currentStepIndex}, totalSteps=${totalSteps}`);
-    Logger.nodeExit('executeStep', 'error');
-
-    return {
-      context: {
-        ...state.context,
-        lastError: {
-          message: 'No step to execute.',
-          timestamp: new Date().toISOString(),
-          type: 'MissingStep',
-          stack: undefined
-        },
-        executionStatus: 'error'
-      } as any
-    };
-  }
-
-  // Get current step
-  // 현재 단계 가져오기
-  const currentStep = executionPlan.plan[currentStepIndex];
-  Logger.nodeAction('executeStep', `Executing step ${currentStepIndex + 1}/${totalSteps}: ${currentStep.step_id}`);
-  Logger.graphState(`Current Step (${currentStep.step_id})`, currentStep);
-
-  // Create list of available tools
-  // 사용 가능한 도구 목록 생성
-  const availableTools = state.tools.map(tool => ({
-    name: tool.name,
-    description: tool.description
-  }));
-
-  // Create step execution prompt
-  // 단계 실행 프롬프트 생성
-  Logger.nodeAction('executeStep', 'Creating step execution prompt');
-  const executeStepPrompt = ChatPromptTemplate.fromTemplate(EXECUTE_STEP_PROMPT);
-
-  // Render prompt
-  // 프롬프트 렌더링
-  const promptValue = await executeStepPrompt.formatMessages({
-    current_step: JSON.stringify(currentStep, null, 2),
-    available_tools: JSON.stringify(availableTools, null, 2)
-  });
-
-  // Model call configuration
-  // 모델 호출 설정
-  const config: RunnableConfig = {
-    configurable: {
-      model: state.context.model
-    }
-  };
-
   try {
+    // Get execution plan and current step
+    // 실행 계획 및 현재 단계 가져오기
+    const { executionPlan, currentStepIndex, totalSteps } = state.context;
+    if (!executionPlan || currentStepIndex === undefined || currentStepIndex >= (totalSteps ?? 0)) {
+      Logger.error(`Invalid execution state: plan=${!!executionPlan}, currentStepIndex=${currentStepIndex}, totalSteps=${totalSteps}`);
+      Logger.nodeExit('executeStep', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'No step to execute.',
+            timestamp: new Date().toISOString(),
+            type: 'MissingStep',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
+    // Get current step
+    // 현재 단계 가져오기
+    const currentStep = executionPlan.plan[currentStepIndex];
+    Logger.nodeAction('executeStep', `Executing step ${currentStepIndex + 1}/${totalSteps}: ${currentStep.step_id}`);
+    Logger.graphState(`Current Step (${currentStep.step_id})`, currentStep);
+
+    // Create list of available tools
+    // 사용 가능한 도구 목록 생성
+    const availableTools = state.tools.map(tool => ({
+      name: tool.name,
+      description: tool.description
+    }));
+
+    // Create step execution prompt
+    // 단계 실행 프롬프트 생성
+    Logger.nodeAction('executeStep', 'Creating step execution prompt');
+    const executeStepPrompt = ChatPromptTemplate.fromTemplate(EXECUTE_STEP_PROMPT);
+
+    // Render prompt
+    // 프롬프트 렌더링
+    const promptValue = await executeStepPrompt.formatMessages({
+      current_step: JSON.stringify(currentStep, null, 2),
+      available_tools: JSON.stringify(availableTools, null, 2)
+    });
+
+    // Model call configuration
+    // 모델 호출 설정
+    const config: RunnableConfig = {
+      configurable: {
+        model: state.context.model
+      }
+    };
+
     // Call model with streaming
     // 스트리밍으로 모델 호출
     Logger.nodeAction('executeStep', 'Calling model for tool selection');
@@ -140,7 +137,6 @@ export async function nodeExecuteStep(state: State): Promise<Update> {
     // 도구 호출이 없는 경우
     if (!toolCall) {
       Logger.nodeAction('executeStep', 'No tool call detected, moving to next step');
-
       // Move to next step
       // 다음 단계로 이동
       const executionResults = [...(state.context.executionResults || []), {
@@ -150,14 +146,11 @@ export async function nodeExecuteStep(state: State): Promise<Update> {
           message: 'Step completed without tool call'
         }
       }];
-
       const isLastStep = currentStepIndex + 1 >= (totalSteps ?? 0);
       Logger.nodeAction('executeStep', `Moving to next step (${currentStepIndex + 1}/${totalSteps})`);
-
       if (isLastStep) {
         Logger.nodeAction('executeStep', 'All steps completed');
       }
-
       Logger.nodeExit('executeStep');
       return {
         messages: [new AIMessage(resultContent)],
@@ -180,39 +173,74 @@ export async function nodeExecuteStep(state: State): Promise<Update> {
       // 특별히 번역 도구를 위한 입력 파라미터 표준화
       // Standardize input parameters specifically for translation tool
       const normalizedInput = { ...toolCall.input };
-
       // input_text를 text로 변환 (번역 도구가 기대하는 형식으로)
       // Convert input_text to text (format expected by translation tool)
       if (normalizedInput.input_text !== undefined && normalizedInput.text === undefined) {
         normalizedInput.text = normalizedInput.input_text;
         delete normalizedInput.input_text;
       }
-
       // target_language 매핑 (필요한 경우)
       // Map target_language (if necessary)
       if (normalizedInput.target_language) {
         normalizedInput.targetLanguage = normalizedInput.target_language;
         delete normalizedInput.target_language;
       }
-
       // 텍스트에서 불필요한 따옴표 제거
       // Remove unnecessary quotes from text
       if (normalizedInput.text && typeof normalizedInput.text === 'string') {
         normalizedInput.text = normalizedInput.text.replace(/^(['"])(.*)\1$/, '$2');
       }
-
       Logger.nodeAction('executeStep', 'Normalized translation tool input');
       toolCall.input = normalizedInput;
     }
 
-    Logger.toolExecution(toolCall.tool, toolCall.input);
+    // 도구 실행 검증
+    // Verify tool execution inputs
+    if (toolCall.tool === 'write_to_file') {
+      const input = toolCall.input || {};
+      // 파일 경로 필드 검증
+      // Validate file path field
+      if (!input.path && !input.file_path) {
+        Logger.error(`Tool execution error: write_to_file - Missing file path`);
+        return {
+          context: {
+            ...state.context,
+            lastError: {
+              message: 'File path is required for write_to_file tool',
+              timestamp: new Date().toISOString(),
+              type: 'InvalidInput',
+              stack: undefined
+            },
+            executionStatus: 'error'
+          } as any
+        };
+      }
 
+      // 파일 내용 필드 검증
+      // Validate file content field
+      if (input.content === undefined || input.content === null) {
+        Logger.error(`Tool execution error: write_to_file - Missing content`);
+        return {
+          context: {
+            ...state.context,
+            lastError: {
+              message: 'File content is required for write_to_file tool',
+              timestamp: new Date().toISOString(),
+              type: 'InvalidInput',
+              stack: undefined
+            },
+            executionStatus: 'error'
+          } as any
+        };
+      }
+    }
+
+    Logger.toolExecution(toolCall.tool, toolCall.input);
     let toolResult: ToolExecutionResult;
     try {
       // Find tool
       // 도구 찾기
       const tool = state.tools.find(t => t.name === toolCall.tool);
-
       if (!tool) {
         // Provide available tool names in the error message
         // 오류 메시지에 사용 가능한 도구 이름 제공
@@ -225,6 +253,26 @@ export async function nodeExecuteStep(state: State): Promise<Update> {
       const result = await tool.execute(toolCall.input);
       Logger.toolResult(toolCall.tool, result, result.success !== false);
 
+      // 도구 실행 실패 시 즉시 중단
+      // Stop immediately if tool execution failed
+      if (result.success === false) {
+        Logger.error(`Tool execution failed: ${toolCall.tool}`, result.error);
+        return {
+          context: {
+            ...state.context,
+            lastError: {
+              message: result.error || 'Tool execution failed',
+              timestamp: new Date().toISOString(),
+              type: 'ToolExecutionError',
+              toolName: toolCall.tool,
+              toolInput: toolCall.input,
+              stack: undefined
+            },
+            executionStatus: 'error'
+          } as any
+        };
+      }
+
       toolResult = {
         success: result.success !== false,
         result,
@@ -236,10 +284,21 @@ export async function nodeExecuteStep(state: State): Promise<Update> {
       Logger.error(`Tool execution error: ${toolCall.tool}`, error);
       Logger.toolResult(toolCall.tool, { error: error.message }, false);
 
-      toolResult = {
-        success: false,
-        result: null,
-        error: error.message
+      // 도구 실행 예외 발생 시 즉시 중단
+      // Stop immediately if tool execution throws an exception
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: error.message,
+            timestamp: new Date().toISOString(),
+            type: 'ToolExecutionException',
+            toolName: toolCall.tool,
+            toolInput: toolCall.input,
+            stack: error.stack
+          },
+          executionStatus: 'error'
+        } as any
       };
     }
 
@@ -256,11 +315,9 @@ export async function nodeExecuteStep(state: State): Promise<Update> {
     // 다음 단계로 이동
     const isLastStep = currentStepIndex + 1 >= (totalSteps ?? 0);
     Logger.nodeAction('executeStep', `Moving to next step (${currentStepIndex + 1}/${totalSteps})`);
-
     if (isLastStep) {
       Logger.nodeAction('executeStep', 'All steps completed');
     }
-
     Logger.nodeExit('executeStep');
     return {
       context: {
@@ -271,9 +328,25 @@ export async function nodeExecuteStep(state: State): Promise<Update> {
         currentTool: null
       } as any
     };
-  } catch (error) {
-    Logger.error('Error in execute step', error);
+  } catch (error: any) {
+    // 예상치 못한 오류 처리
+    // Handle unexpected errors
+    Logger.error('Unexpected error in execute step', error);
     Logger.nodeExit('executeStep', 'error');
-    throw error;
+
+    // 오류 발생 시 즉시 중단하고 오류 상태로 전환
+    // Stop immediately when an error occurs and change to error status
+    return {
+      context: {
+        ...state.context,
+        lastError: {
+          message: error.message || 'Unknown error occurred',
+          timestamp: new Date().toISOString(),
+          type: 'UnexpectedError',
+          stack: error.stack
+        },
+        executionStatus: 'error'
+      } as any
+    };
   }
 }

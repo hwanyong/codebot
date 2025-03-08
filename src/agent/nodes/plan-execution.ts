@@ -19,71 +19,102 @@ import { Logger } from '../../utils/logger.js';
 export async function nodePlanExecution(state: State): Promise<Update> {
   Logger.nodeEntry('planExecution');
 
-  // Get task analysis
-  // 태스크 분석 가져오기
-  const taskAnalysis = state.context.currentTask;
-  // const lastMessage = state.messages[state.messages.length - 1];
-
-  if (!taskAnalysis) {
-    Logger.error('No task analysis result available');
-    Logger.nodeExit('planExecution', 'error');
-
-    return {
-      context: {
-        ...state.context,
-        lastError: {
-          message: 'No task analysis result available.',
-          timestamp: new Date().toISOString(),
-          type: 'MissingTaskAnalysis',
-          stack: undefined
-        },
-        executionStatus: 'error'
-      } as any
-    };
-  }
-
-  // Check if task is a simple response that doesn't require tool execution
-  // 도구 실행이 필요 없는 단순 응답인지 확인
-  if (taskAnalysis.task_type === 'simple_response' ||
-      (taskAnalysis.subtasks && taskAnalysis.subtasks.length === 0)) {
-    Logger.nodeAction('planExecution', 'Task requires only direct response without tool execution');
-
-    // Mark this as a direct response case
-    // 직접 응답 케이스로 표시
-    return {
-      context: {
-        ...state.context,
-        executionPlan: null,
-        requiresToolExecution: false,
-        directResponse: true,
-        executionStatus: 'completed'
-      } as any
-    };
-  }
-
-  // Create planning prompt
-  // 계획 실행 프롬프트 생성
-  Logger.nodeAction('planExecution', 'Creating planning prompt');
-  // const planningPrompt = ChatPromptTemplate.fromMessages([
-  //   ["system", PLANNING_PROMPT]
-  // ]);
-  const planningPrompt = ChatPromptTemplate.fromTemplate(PLANNING_PROMPT);
-
-  // Render prompt
-  // 프롬프트 렌더링
-  const promptValue = await planningPrompt.formatMessages({
-    task_analysis: JSON.stringify(taskAnalysis, null, 2)
-  });
-
-  // Model call configuration
-  // 모델 호출 설정
-  const config: RunnableConfig = {
-    configurable: {
-      model: state.context.model
-    }
-  };
-
   try {
+    // 입력 검증: 태스크 분석 결과 존재 여부 확인
+    // Input validation: Check if task analysis exists
+    const taskAnalysis = state.context.currentTask;
+    if (!taskAnalysis) {
+      Logger.error('No task analysis result available');
+      Logger.nodeExit('planExecution', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'No task analysis result available.',
+            timestamp: new Date().toISOString(),
+            type: 'MissingTaskAnalysis',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
+    // 입력 검증: 필수 필드 확인
+    // Input validation: Check required fields
+    if (!taskAnalysis.task_type || !taskAnalysis.subtasks) {
+      Logger.error('Invalid task analysis format');
+      Logger.nodeExit('planExecution', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Invalid task analysis format. Missing required fields.',
+            timestamp: new Date().toISOString(),
+            type: 'InvalidTaskAnalysis',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
+    // Check if task is a simple response that doesn't require tool execution
+    // 도구 실행이 필요 없는 단순 응답인지 확인
+    if (taskAnalysis.task_type === 'simple_response' ||
+        (taskAnalysis.subtasks && taskAnalysis.subtasks.length === 0)) {
+      Logger.nodeAction('planExecution', 'Task requires only direct response without tool execution');
+      // Mark this as a direct response case
+      // 직접 응답 케이스로 표시
+      return {
+        context: {
+          ...state.context,
+          executionPlan: null,
+          requiresToolExecution: false,
+          directResponse: true,
+          executionStatus: 'completed'
+        } as any
+      };
+    }
+
+    // 모델 검증: 모델이 설정되어 있는지 확인
+    // Validate model: Check if model is configured
+    if (!state.context.model) {
+      Logger.error('Model is not configured');
+      Logger.nodeExit('planExecution', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Language model is not configured.',
+            timestamp: new Date().toISOString(),
+            type: 'ConfigError',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
+    // Create planning prompt
+    // 계획 실행 프롬프트 생성
+    Logger.nodeAction('planExecution', 'Creating planning prompt');
+    const planningPrompt = ChatPromptTemplate.fromTemplate(PLANNING_PROMPT);
+
+    // Render prompt
+    // 프롬프트 렌더링
+    const promptValue = await planningPrompt.formatMessages({
+      task_analysis: JSON.stringify(taskAnalysis, null, 2)
+    });
+
+    // Model call configuration
+    // 모델 호출 설정
+    const config: RunnableConfig = {
+      configurable: {
+        model: state.context.model
+      }
+    };
+
     // Call model with streaming
     // 스트리밍으로 모델 호출
     Logger.nodeAction('planExecution', 'Calling model for execution planning');
@@ -105,6 +136,25 @@ export async function nodePlanExecution(state: State): Promise<Update> {
       }
     }
 
+    // 응답 검증: 결과 내용이 존재하는지 확인
+    // Validate response: Check if result content exists
+    if (!resultContent.trim()) {
+      Logger.error('Empty response from model');
+      Logger.nodeExit('planExecution', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Received empty response from language model.',
+            timestamp: new Date().toISOString(),
+            type: 'ModelError',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
     // 모델 응답 완료 이벤트 발생
     Logger.nodeModelEnd('planExecution');
 
@@ -119,16 +169,23 @@ export async function nodePlanExecution(state: State): Promise<Update> {
       } else {
         executionPlan = JSON.parse(resultContent);
       }
+
+      // 결과 검증: 필수 필드 확인
+      // Validate result: Check required fields
+      if (!executionPlan.plan || !Array.isArray(executionPlan.plan)) {
+        throw new Error('Invalid execution plan format. Missing required fields.');
+      }
+
       Logger.nodeAction('planExecution', `Execution plan created with ${executionPlan.plan.length} steps`);
       Logger.graphState('Execution Plan', executionPlan);
-    } catch (error) {
+    } catch (error: any) {
       Logger.error('Failed to parse execution plan', error);
       Logger.nodeExit('planExecution', 'error');
       return {
         context: {
           ...state.context,
           lastError: {
-            message: 'Unable to parse execution plan.',
+            message: `Unable to parse execution plan: ${error.message}`,
             timestamp: new Date().toISOString(),
             type: 'ParseError',
             stack: error instanceof Error ? error.stack : undefined
@@ -171,9 +228,25 @@ export async function nodePlanExecution(state: State): Promise<Update> {
         executionStatus: 'running'
       } as any
     };
-  } catch (error) {
-    Logger.error('Error in plan execution', error);
+  } catch (error: any) {
+    // 예상치 못한 오류 처리
+    // Handle unexpected errors
+    Logger.error('Unexpected error in plan execution', error);
     Logger.nodeExit('planExecution', 'error');
-    throw error;
+
+    // 오류 발생 시 즉시 중단하고 오류 상태로 전환
+    // Stop immediately when an error occurs and change to error status
+    return {
+      context: {
+        ...state.context,
+        lastError: {
+          message: error.message || 'Unknown error occurred during execution planning',
+          timestamp: new Date().toISOString(),
+          type: 'UnexpectedError',
+          stack: error.stack
+        },
+        executionStatus: 'error'
+      } as any
+    };
   }
 }

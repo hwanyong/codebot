@@ -66,23 +66,23 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
     rl.prompt();
 
     // 이벤트 핸들러를 설정하는 함수
-    const setupEventHandlers = (interface: readline.Interface) => {
-      interface.on('line', async (line) => {
+    const setupEventHandlers = (rlInterface: readline.Interface) => {
+      rlInterface.on('line', async (line) => {
         // 슬래시 명령어 처리
         if (line.startsWith('/')) {
-          await handleSlashCommand(line, interface);
+          await handleSlashCommand(line, rlInterface);
           return;
         }
 
         // 빈 입력 처리
         if (line.trim() === '') {
-          interface.prompt();
+          rlInterface.prompt();
           return;
         }
 
         try {
           // 에이전트 실행 전 현재 readline 인터페이스 비활성화
-          interface.pause();
+          rlInterface.pause();
 
           // 에이전트 실행 - 스피너는 이벤트에 따라 자동으로 관리됨
           const response = await agentManager.run(line);
@@ -90,7 +90,7 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
           // 응답 표시 - 스피너는 자동으로 닫힘
 
           // 에이전트 실행 후 readline 인터페이스 완전 재생성
-          interface.close();
+          rlInterface.close();
 
           // TTY 상태가 완전히 초기화될 수 있도록 약간의 지연 추가
           setTimeout(() => {
@@ -117,7 +117,7 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
           console.log(chalk.yellow(i18n.t('session_continued')));
 
           // 에이전트 실행 오류 후에도 readline 인터페이스 완전 재생성
-          interface.close();
+          rlInterface.close();
 
           setTimeout(() => {
             // 새 readline 인터페이스 생성
@@ -136,11 +136,12 @@ async function startInteractiveSession(options: AgentOptions): Promise<void> {
       });
 
       // readline 인터페이스가 닫힐 때 이벤트 처리
-      interface.on('close', () => {
+      rlInterface.on('close', () => {
         // 스피너 관리자 정리
         spinnerManager.cleanup();
 
-        console.log(chalk.green(i18n.t('goodbye')));
+        // console.log(chalk.green(i18n.t('goodbye')));
+
         // Promise 해결
         resolve();
       });

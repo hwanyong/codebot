@@ -18,28 +18,85 @@ import { Logger } from '../../utils/logger.js';
 export async function nodeAnalyzeTask(state: State): Promise<Update> {
   Logger.nodeEntry('analyzeTask');
 
-  // Get the last user message
-  // 마지막 사용자 메시지 가져오기
-  const lastMessage = state.messages[state.messages.length - 1];
-
-  // Create task analysis prompt using direct approach to avoid template issues
-  // 템플릿 문제를 피하기 위해 직접 접근 방식을 사용하여 작업 분석 프롬프트 생성
-  Logger.nodeAction('analyzeTask', 'Creating task analysis prompt');
-
-  // Format the prompt directly to avoid template parsing issues with JSON braces
-  // JSON 중괄호로 인한 템플릿 파싱 문제를 피하기 위해 프롬프트를 직접 포맷팅
-  const formattedPrompt = TASK_ANALYSIS_PROMPT.replace('{user_request}', lastMessage.content as string);
-  const promptValue = [new HumanMessage(formattedPrompt)];
-
-  // Model call configuration
-  // 모델 호출 설정
-  const config: RunnableConfig = {
-    configurable: {
-      model: state.context.model
-    }
-  };
-
   try {
+    // 입력 검증: 메시지가 있는지 확인
+    // Validate input: Check if messages exist
+    if (!state.messages || state.messages.length === 0) {
+      Logger.error('No messages available for analysis');
+      Logger.nodeExit('analyzeTask', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'No messages available for analysis.',
+            timestamp: new Date().toISOString(),
+            type: 'InvalidInput',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
+    // Get the last user message
+    // 마지막 사용자 메시지 가져오기
+    const lastMessage = state.messages[state.messages.length - 1];
+
+    // 입력 검증: 메시지 내용이 있는지 확인
+    // Validate input: Check if message has content
+    if (!lastMessage.content) {
+      Logger.error('Last message has no content');
+      Logger.nodeExit('analyzeTask', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Last message has no content for analysis.',
+            timestamp: new Date().toISOString(),
+            type: 'InvalidInput',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
+    // Create task analysis prompt using direct approach to avoid template issues
+    // 템플릿 문제를 피하기 위해 직접 접근 방식을 사용하여 작업 분석 프롬프트 생성
+    Logger.nodeAction('analyzeTask', 'Creating task analysis prompt');
+
+    // Format the prompt directly to avoid template parsing issues with JSON braces
+    // JSON 중괄호로 인한 템플릿 파싱 문제를 피하기 위해 프롬프트를 직접 포맷팅
+    const formattedPrompt = TASK_ANALYSIS_PROMPT.replace('{user_request}', lastMessage.content as string);
+    const promptValue = [new HumanMessage(formattedPrompt)];
+
+    // Model call configuration
+    // 모델 호출 설정
+    const config: RunnableConfig = {
+      configurable: {
+        model: state.context.model
+      }
+    };
+
+    // 모델 검증: 모델이 설정되어 있는지 확인
+    // Validate model: Check if model is configured
+    if (!state.context.model) {
+      Logger.error('Model is not configured');
+      Logger.nodeExit('analyzeTask', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Language model is not configured.',
+            timestamp: new Date().toISOString(),
+            type: 'ConfigError',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
     // Call model with streaming
     // 스트리밍으로 모델 호출
     Logger.nodeAction('analyzeTask', 'Calling model for task analysis');
@@ -61,6 +118,25 @@ export async function nodeAnalyzeTask(state: State): Promise<Update> {
       }
     }
 
+    // 응답 검증: 결과 내용이 존재하는지 확인
+    // Validate response: Check if result content exists
+    if (!resultContent.trim()) {
+      Logger.error('Empty response from model');
+      Logger.nodeExit('analyzeTask', 'error');
+      return {
+        context: {
+          ...state.context,
+          lastError: {
+            message: 'Received empty response from language model.',
+            timestamp: new Date().toISOString(),
+            type: 'ModelError',
+            stack: undefined
+          },
+          executionStatus: 'error'
+        } as any
+      };
+    }
+
     // 모델 응답 완료 이벤트 발생
     Logger.nodeModelEnd('analyzeTask');
 
@@ -75,16 +151,23 @@ export async function nodeAnalyzeTask(state: State): Promise<Update> {
       } else {
         taskAnalysis = JSON.parse(resultContent);
       }
+
+      // 결과 검증: 필수 필드 확인
+      // Validate result: Check required fields
+      if (!taskAnalysis.task_type || !taskAnalysis.subtasks || !Array.isArray(taskAnalysis.subtasks)) {
+        throw new Error('Invalid task analysis format. Missing required fields.');
+      }
+
       Logger.nodeAction('analyzeTask', `Task analysis complete with ${taskAnalysis.subtasks?.length || 0} subtasks`);
       Logger.graphState('Task Analysis', taskAnalysis);
-    } catch (error) {
+    } catch (error: any) {
       Logger.error('Failed to parse task analysis', error);
       Logger.nodeExit('analyzeTask', 'error');
       return {
         context: {
           ...state.context,
           lastError: {
-            message: 'Unable to parse task analysis result.',
+            message: `Unable to parse task analysis result: ${error.message}`,
             timestamp: new Date().toISOString(),
             type: 'ParseError',
             stack: error instanceof Error ? error.stack : undefined
@@ -97,7 +180,6 @@ export async function nodeAnalyzeTask(state: State): Promise<Update> {
     // Save analysis result
     // 분석 결과 저장
     const aiMessage = new AIMessage(resultContent);
-
     Logger.nodeExit('analyzeTask');
     return {
       messages: [aiMessage],
@@ -106,9 +188,25 @@ export async function nodeAnalyzeTask(state: State): Promise<Update> {
         executionStatus: 'running'
       } as any
     };
-  } catch (error) {
-    Logger.error('Error in task analysis', error);
+  } catch (error: any) {
+    // 예상치 못한 오류 처리
+    // Handle unexpected errors
+    Logger.error('Unexpected error in task analysis', error);
     Logger.nodeExit('analyzeTask', 'error');
-    throw error;
+
+    // 오류 발생 시 즉시 중단하고 오류 상태로 전환
+    // Stop immediately when an error occurs and change to error status
+    return {
+      context: {
+        ...state.context,
+        lastError: {
+          message: error.message || 'Unknown error occurred during task analysis',
+          timestamp: new Date().toISOString(),
+          type: 'UnexpectedError',
+          stack: error.stack
+        },
+        executionStatus: 'error'
+      } as any
+    };
   }
 }
