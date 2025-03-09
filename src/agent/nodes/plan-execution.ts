@@ -409,90 +409,15 @@ export async function nodePlanExecution(state: State): Promise<Update> {
       };
     }
 
-    // 재구성된 태스크 분석 생성 (안전한 접근으로 변경)
-    // Create restructured task analysis with a safe approach
-    let restructuredTaskAnalysis: TaskAnalysis;
-
-    try {
-      // Step 1: AI를 사용하여 서브태스크 세분화 시도
-      // Step 1: Try to refine subtasks using AI
-      Logger.nodeAction('planExecution', 'Refining subtasks into more detailed steps');
-      let refinedSubtasks = taskAnalysis.subtasks;
-
-      try {
-        const aiRefinedSubtasks = await refineSubtasksUsingAI(taskAnalysis.subtasks, state.context.model);
-        if (aiRefinedSubtasks && aiRefinedSubtasks.length > 0) {
-          refinedSubtasks = aiRefinedSubtasks;
-          Logger.nodeAction('planExecution', `Successfully refined ${refinedSubtasks.length} subtasks`);
-        } else {
-          Logger.nodeAction('planExecution', 'Using original subtasks as refinement failed');
-        }
-      } catch (refinementError) {
-        Logger.error('Failed to refine subtasks, continuing with original subtasks', refinementError);
-      }
-
-      // Step 2: AI를 사용하여 잠재적 도구를 실제 사용 가능한 도구로 매핑 시도
-      // Step 2: Try to map potential tools to actually available tools using AI
-      Logger.nodeAction('planExecution', 'Mapping potential tools to available tools');
-      let mappedSubtasks = refinedSubtasks;
-
-      try {
-        const aiMappedSubtasks = await mapSubtaskToolsUsingAI(refinedSubtasks, state.context.model);
-        if (aiMappedSubtasks && aiMappedSubtasks.length > 0) {
-          mappedSubtasks = aiMappedSubtasks;
-          Logger.nodeAction('planExecution', `Successfully mapped tools for ${mappedSubtasks.length} subtasks`);
-        } else {
-          Logger.nodeAction('planExecution', 'Using refined subtasks as mapping failed');
-        }
-      } catch (mappingError) {
-        Logger.error('Failed to map tools, adding default tools', mappingError);
-        // 매핑 실패 시 기본 도구 추가
-        // 안전한 복사 및 타입 확인을 통한 도구 추가
-        mappedSubtasks = refinedSubtasks.map((subtask: Record<string, any>) => {
-          // 원본 서브태스크의 모든 속성을 유지하면서 깊은 복사 수행
-          const updatedSubtask = { ...JSON.parse(JSON.stringify(subtask)) };
-
-          // 실제 도구 배열 추가
-          updatedSubtask.actual_tools = ["ExecuteCommandTool", "WriteToFileTool", "ReadFileTool"];
-
-          return updatedSubtask;
-        });
-      }
-
-      // 재구성된 태스크 분석 생성
-      restructuredTaskAnalysis = {
-        ...JSON.parse(JSON.stringify(taskAnalysis)), // 깊은 복사를 통한 안전한 객체 생성
-        subtasks: mappedSubtasks
-      } as TaskAnalysis;
-
-    } catch (processingError) {
-      Logger.error('Error during task preprocessing', processingError);
-      // 오류 발생 시 원본 태스크에 기본 도구 추가
-      restructuredTaskAnalysis = {
-        ...JSON.parse(JSON.stringify(taskAnalysis)), // 깊은 복사를 통한 안전한 객체 생성
-        subtasks: taskAnalysis.subtasks.map((subtask: Record<string, any>) => {
-          // 원본 서브태스크의 모든 속성을 유지하면서 깊은 복사 수행
-          const updatedSubtask = { ...JSON.parse(JSON.stringify(subtask)) };
-
-          // 실제 도구 배열 추가
-          updatedSubtask.actual_tools = ["ExecuteCommandTool", "WriteToFileTool", "ReadFileTool"];
-
-          return updatedSubtask;
-        })
-      } as TaskAnalysis;
-    }
-
-    Logger.graphState('Restructured Task Analysis', restructuredTaskAnalysis);
-
-    // Create planning prompt
-    // 계획 실행 프롬프트 생성
-    Logger.nodeAction('planExecution', 'Creating planning prompt');
+    // Create planning prompt with integrated subtask refinement and tool mapping
+    // 서브태스크 세분화 및 도구 매핑이 통합된 계획 프롬프트 생성
+    Logger.nodeAction('planExecution', 'Creating planning prompt with integrated subtask refinement and tool mapping');
     const planningPrompt = ChatPromptTemplate.fromTemplate(PLANNING_PROMPT);
 
-    // Render prompt
-    // 프롬프트 렌더링
+    // Render prompt with task analysis
+    // 태스크 분석을 포함한 프롬프트 렌더링
     const promptValue = await planningPrompt.formatMessages({
-      task_analysis: JSON.stringify(restructuredTaskAnalysis, null, 2)
+      task_analysis: JSON.stringify(taskAnalysis, null, 2)
     });
 
     // Model call configuration
@@ -505,8 +430,8 @@ export async function nodePlanExecution(state: State): Promise<Update> {
 
     // Call model with streaming
     // 스트리밍으로 모델 호출
-    Logger.nodeAction('planExecution', 'Calling model for execution planning');
-    Logger.nodeModelStart('planExecution', 'Starting model streaming for execution planning');
+    Logger.nodeAction('planExecution', 'Calling model for integrated task processing and execution planning');
+    Logger.nodeModelStart('planExecution', 'Starting model streaming for subtask refinement, tool mapping, and execution planning');
 
     // Stream response using the model's streaming capability
     // 모델의 스트리밍 기능을 사용하여 응답 스트리밍
@@ -548,83 +473,142 @@ export async function nodePlanExecution(state: State): Promise<Update> {
 
     // Parse JSON response
     // JSON 응답 파싱
-    Logger.nodeAction('planExecution', 'Parsing execution plan');
-    let executionPlan: ExecutionPlan;
+    Logger.nodeAction('planExecution', 'Parsing integrated response');
+
     try {
       // 정규식 개선: JSON 형식 추출을 위한 더 견고한 패턴
       const jsonMatch = resultContent.match(/```(?:json)?\s*\n([\s\S]*?)\n```/) ||
                         resultContent.match(/```([\s\S]*?)```/) ||
                         resultContent.match(/({[\s\S]*})/);
 
+      let parsedResponse;
       if (jsonMatch) {
         const jsonContent = jsonMatch[1] || jsonMatch[0];
-        executionPlan = JSON.parse(jsonContent.trim());
+        parsedResponse = JSON.parse(jsonContent.trim());
       } else {
-        executionPlan = JSON.parse(resultContent);
+        parsedResponse = JSON.parse(resultContent);
       }
 
-      // 결과 검증: 필수 필드 확인
-      // Validate result: Check required fields
-      if (!executionPlan.plan || !Array.isArray(executionPlan.plan)) {
-        throw new Error('Invalid execution plan format. Missing required fields.');
+      // 결과 검증 및 처리
+      // Validate and process the result
+
+      // 세분화된 서브태스크 검증
+      // Validate refined subtasks
+      if (!parsedResponse.refined_subtasks || !Array.isArray(parsedResponse.refined_subtasks)) {
+        Logger.nodeAction('planExecution', 'No refined subtasks found in response, continuing with original subtasks');
+        // 원본 서브태스크 유지
+        // Keep original subtasks
+      } else {
+        Logger.nodeAction('planExecution', `Successfully refined subtasks: ${parsedResponse.refined_subtasks.length}`);
+        // 세분화된 서브태스크로 업데이트
+        // Update with refined subtasks
+        taskAnalysis.subtasks = parsedResponse.refined_subtasks;
       }
+
+      // 실행 계획 검증
+      // Validate execution plan
+      if (!parsedResponse.plan || !Array.isArray(parsedResponse.plan)) {
+        throw new Error('Invalid execution plan format. Missing required plan array.');
+      }
+
+      // 실행 계획 생성
+      // Create execution plan
+      const executionPlan: ExecutionPlan = {
+        plan: parsedResponse.plan
+      };
 
       Logger.nodeAction('planExecution', `Execution plan created with ${executionPlan.plan.length} steps`);
       Logger.graphState('Execution Plan', executionPlan);
-    } catch (error: any) {
-      Logger.error('Failed to parse execution plan', error);
-      Logger.nodeExit('planExecution', 'error');
-      return {
-        context: {
-          ...state.context,
-          lastError: {
-            message: `Unable to parse execution plan: ${error.message}`,
-            timestamp: new Date().toISOString(),
-            type: 'ParseError',
-            stack: error instanceof Error ? error.stack : undefined
-          },
-          executionStatus: 'error'
-        } as any
-      };
-    }
 
-    // Check if plan is empty or contains only direct response steps
-    // 계획이 비어 있거나 직접 응답 단계만 포함하는지 확인
-    if (executionPlan.plan.length === 0 ||
-        (executionPlan.plan.length === 1 && executionPlan.plan[0].tool === 'direct_response')) {
-      Logger.nodeAction('planExecution', 'Plan indicates direct response without tool execution');
+      // Check if plan is empty or contains only direct response steps
+      // 계획이 비어 있거나 직접 응답 단계만 포함하는지 확인
+      if (executionPlan.plan.length === 0 ||
+          (executionPlan.plan.length === 1 && executionPlan.plan[0].tool === 'direct_response')) {
+        Logger.nodeAction('planExecution', 'Plan indicates direct response without tool execution');
+        return {
+          messages: [new AIMessage(resultContent)],
+          context: {
+            ...state.context,
+            executionPlan,
+            requiresToolExecution: false,
+            directResponse: true,
+            executionStatus: 'completed'
+          } as any
+        };
+      }
+
+      // 재구성된 태스크 분석 결과를 저장
+      // Save restructured task analysis
+      state.context.currentTask = taskAnalysis;
+
+      // Save execution plan
+      // 실행 계획 저장
+      Logger.nodeExit('planExecution');
       return {
         messages: [new AIMessage(resultContent)],
         context: {
           ...state.context,
           executionPlan,
-          requiresToolExecution: false,
-          directResponse: true,
-          executionStatus: 'completed'
+          totalSteps: executionPlan.plan.length,
+          currentStepIndex: 0,
+          executionResults: [],
+          requiresToolExecution: true,
+          directResponse: false,
+          executionStatus: 'running'
         } as any
       };
+    } catch (error: any) {
+      // JSON 파싱 또는 검증 오류 처리
+      // Handle JSON parsing or validation error
+      Logger.error('Failed to parse or validate integrated response', error);
+      Logger.nodeExit('planExecution', 'error');
+
+      // 대체 파싱 시도: 실행 계획 부분만 추출 시도
+      // Try alternative parsing: attempt to extract just the execution plan
+      try {
+        const planMatch = resultContent.match(/"plan"\s*:\s*(\[\s*\{[\s\S]*?\}\s*\])/);
+        if (planMatch) {
+          const planJson = `{"plan": ${planMatch[1]}}`;
+          const executionPlan = JSON.parse(planJson) as ExecutionPlan;
+
+          // 실행 계획이 유효한지 확인
+          if (executionPlan.plan && Array.isArray(executionPlan.plan) && executionPlan.plan.length > 0) {
+            Logger.nodeAction('planExecution', `Recovered execution plan with ${executionPlan.plan.length} steps`);
+
+            // 실행 계획 저장하고 진행
+            return {
+              messages: [new AIMessage("Execution plan was successfully extracted.")],
+              context: {
+                ...state.context,
+                executionPlan,
+                totalSteps: executionPlan.plan.length,
+                currentStepIndex: 0,
+                executionResults: [],
+                requiresToolExecution: true,
+                directResponse: false,
+                executionStatus: 'running'
+              } as any
+            };
+          }
+        }
+
+        // 대체 파싱도 실패할 경우 오류 반환
+        throw new Error(`Unable to parse execution plan: ${error.message}`);
+      } catch (recoveryError) {
+        return {
+          context: {
+            ...state.context,
+            lastError: {
+              message: `Unable to parse execution plan: ${error.message}`,
+              timestamp: new Date().toISOString(),
+              type: 'ParseError',
+              stack: error instanceof Error ? error.stack : undefined
+            },
+            executionStatus: 'error'
+          } as any
+        };
+      }
     }
-
-    // 재구성된 태스크 분석 결과를 저장
-    // Save restructured task analysis
-    state.context.currentTask = restructuredTaskAnalysis;
-
-    // Save execution plan
-    // 실행 계획 저장
-    Logger.nodeExit('planExecution');
-    return {
-      messages: [new AIMessage(resultContent)],
-      context: {
-        ...state.context,
-        executionPlan,
-        totalSteps: executionPlan.plan.length,
-        currentStepIndex: 0,
-        executionResults: [],
-        requiresToolExecution: true,
-        directResponse: false,
-        executionStatus: 'running'
-      } as any
-    };
   } catch (error: any) {
     // 예상치 못한 오류 처리
     // Handle unexpected errors
