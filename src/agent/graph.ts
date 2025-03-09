@@ -179,11 +179,25 @@ const safeInvoke = async (state: State, config?: RunnableConfig): Promise<State>
       totalSteps: result.context?.totalSteps
     });
 
+    // 그래프 실행이 완료되면 모든 스트림 강제 종료 및 리소스 정리
+    // Force close all streams and clean up resources when graph execution is complete
+    if (result.context?.executionStatus === 'completed' || result.context?.executionStatus === 'error') {
+      // 약간의 지연 후 스트림 종료 (마지막 응답이 모두 출력되도록)
+      setTimeout(() => {
+        Logger.forceCloseAllStreams();
+
+        // CLI 모드 안정화를 위한 추가 처리는 Logger.forceCloseAllStreams() 내에서 처리됨
+      }, 300); // 지연 시간 증가 (300ms)
+    }
+
     return result;
   } catch (error) {
     // Handle errors during execution appropriately
     // 실행 중 오류를 적절히 처리
     Logger.error('Error during graph execution', error);
+
+    // 오류 발생 시에도 스트림 정리
+    Logger.forceCloseAllStreams();
 
     // Create a safe error response state if possible
     // 가능한 경우 안전한 오류 응답 상태 생성

@@ -54,6 +54,25 @@ export class Logger {
   // 누적된 스트리밍 내용을 저장하기 위한 변수
   private static _accumulatedOutput: string = '';
 
+  // 노드별 스트리밍 상태를 추적하는 맵 추가
+  private static _nodeStreamingStates: Map<string, {
+    isStreaming: boolean;
+    accumulatedOutput: string;
+    lastUpdateTime: number;
+  }> = new Map();
+
+  // 활성 스트리밍 노드를 관리하는 큐 (순서 보장을 위함)
+  private static _activeStreamingNodes: string[] = [];
+
+  // 스트림 출력 충돌을 방지하기 위한 락
+  private static _streamingLock: boolean = false;
+
+  // 스트림 종료 타이머 ID
+  private static _streamCleanupTimers: Map<string, NodeJS.Timeout> = new Map();
+
+  // 중복 출력 방지를 위한 플래그 추가
+  private static _hasShownCompletionMessage: boolean = false;
+
   /**
    * 정적 초기화 블록
    * 클래스가 로드될 때 설정 변경 리스너 설정
@@ -305,6 +324,24 @@ export class Logger {
       console.log(chalk.magenta(`[${nodeName}] ${action}`));
     }
 
+    // 노드의 스트리밍 상태 초기화
+    Logger._nodeStreamingStates.set(nodeName, {
+      isStreaming: false,
+      accumulatedOutput: '',
+      lastUpdateTime: Date.now()
+    });
+
+    // 활성 노드 배열에 추가
+    if (!Logger._activeStreamingNodes.includes(nodeName)) {
+      Logger._activeStreamingNodes.push(nodeName);
+    }
+
+    // 기존 스트림 정리 타이머가 있다면 제거
+    if (Logger._streamCleanupTimers.has(nodeName)) {
+      clearTimeout(Logger._streamCleanupTimers.get(nodeName));
+      Logger._streamCleanupTimers.delete(nodeName);
+    }
+
     // 모델 시작 이벤트 방출
     Logger._eventManager.emit({
       nodeName,
@@ -323,43 +360,101 @@ export class Logger {
    */
   public static nodeModelStreaming(nodeName: string, content: string): void {
     try {
+      // 컨텐츠가 비어있으면 처리하지 않음
+      if (!content.trim()) {
+        return;
+      }
+
       // 해당 노드에 대한 스트리밍 가시성 확인
       const isVisible = Logger._isStreamingVisibleForNode(nodeName);
-      if (isVisible) {
-        // 실제 내용이 있는 경우에만 처리
-        if (content.trim()) {
-          // 모델 스트리밍 이벤트 방출
-          Logger._eventManager.emit({
-            nodeName,
-            eventType: NodeEventType.MODEL_STREAMING,
-            payload: { content }
-          });
-          // 디버그 모드나 특별히 설정된 노드의 경우 내용 출력
-          if (Logger._config.debug || Logger._config.aiStream ||
-              Logger._config.alwaysVisibleNodes.includes(nodeName)) {
-            // 노드가 변경된 경우 새 스트리밍 세션 시작
-            if (!Logger._lastStreamingNode || Logger._lastStreamingNode !== nodeName) {
-              console.log(chalk.magenta(`\n[${nodeName} 스트림 시작]`));
-              Logger._lastStreamingNode = nodeName;
-              Logger._accumulatedOutput = '';
-            }
-            // 누적된 출력에서 새로운 부분만 추출하여 출력
-            if (content.length > Logger._accumulatedOutput.length) {
-              // 이전에 출력하지 않은 새 부분만 가져옴
-              const newContent = content.substring(Logger._accumulatedOutput.length);
-              // 새 내용이 있는 경우에만 출력
-              if (newContent) {
-                process.stdout.write(newContent);
+      if (!isVisible) {
+        return;
+      }
+
+      // 모델 스트리밍 이벤트 방출
+      Logger._eventManager.emit({
+        nodeName,
+        eventType: NodeEventType.MODEL_STREAMING,
+        payload: { content }
+      });
+
+      // 디버그 모드나 특별히 설정된 노드의 경우 내용 출력
+      if (Logger._config.debug || Logger._config.aiStream ||
+          Logger._config.alwaysVisibleNodes.includes(nodeName)) {
+
+        // 노드의 현재 스트리밍 상태 가져오기
+        let nodeState = Logger._nodeStreamingStates.get(nodeName);
+        if (!nodeState) {
+          // 상태가 없으면 새로 생성
+          nodeState = {
+            isStreaming: false,
+            accumulatedOutput: '',
+            lastUpdateTime: Date.now()
+          };
+          Logger._nodeStreamingStates.set(nodeName, nodeState);
+
+          // 활성 노드 목록에 추가
+          if (!Logger._activeStreamingNodes.includes(nodeName)) {
+            Logger._activeStreamingNodes.push(nodeName);
+          }
+        }
+
+        // 노드가 아직 스트리밍 중이 아닌 경우 시작 메시지 출력
+        if (!nodeState.isStreaming) {
+          console.log(chalk.magenta(`\n[${nodeName} 스트림 시작]`));
+          nodeState.isStreaming = true;
+        }
+
+        // 누적된 출력에서 새로운 부분만 추출하여 출력
+        if (content.length > nodeState.accumulatedOutput.length) {
+          // 이전에 출력하지 않은 새 부분만 가져옴
+          const newContent = content.substring(nodeState.accumulatedOutput.length);
+
+          // <think> 태그 및 특수 토큰 필터링
+          let filteredContent = newContent;
+
+          // <think> 태그 패턴 필터링 (다양한 AI 제공자에 맞게 유연하게 처리)
+          const thinkTagPattern = /<\s*think\s*>|<\s*\/\s*think\s*>/gi;
+          filteredContent = filteredContent.replace(thinkTagPattern, '');
+
+          // 새 내용이 있는 경우에만 출력
+          if (filteredContent) {
+            // 락 획득 시도
+            if (!Logger._streamingLock) {
+              Logger._streamingLock = true;
+              try {
+                // 원본 개행을 존중하여 출력
+                process.stdout.write(filteredContent);
+              } finally {
+                // 락 해제
+                Logger._streamingLock = false;
               }
-              // 현재 내용을 누적 출력에 저장
-              Logger._accumulatedOutput = content;
+            } else {
+              // 락을 획득하지 못한 경우 약간 지연 후 재시도 (선택적)
+              setTimeout(() => {
+                if (!Logger._streamingLock) {
+                  Logger._streamingLock = true;
+                  try {
+                    process.stdout.write(filteredContent);
+                  } finally {
+                    Logger._streamingLock = false;
+                  }
+                }
+              }, 10);
             }
           }
+
+          // 현재 내용을 누적 출력에 저장
+          nodeState.accumulatedOutput = content;
+          // 마지막 업데이트 시간 갱신
+          nodeState.lastUpdateTime = Date.now();
         }
       }
     } catch (error) {
       // 스트림 출력 처리 중 오류가 발생해도 애플리케이션이 중단되지 않도록 처리
       console.error(chalk.red(`[Logger] Error in nodeModelStreaming for ${nodeName}:`), error);
+      // 오류 발생 시 락 강제 해제
+      Logger._streamingLock = false;
     }
   }
 
@@ -372,15 +467,63 @@ export class Logger {
    */
   public static nodeModelEnd(nodeName: string): void {
     try {
+      // 노드의 스트리밍 상태 가져오기
+      const nodeState = Logger._nodeStreamingStates.get(nodeName);
+
       // 현재 노드가 스트리밍 중이었던 경우에만 스트림 종료 메시지 출력
-      if (Logger._lastStreamingNode === nodeName && Logger._accumulatedOutput) {
-        // 스트림 출력이 있었을 때만 종료 메시지 표시
+      if (nodeState && nodeState.isStreaming) {
         console.log(chalk.magenta(`\n[${nodeName} 스트림 종료]\n`));
 
-        // 변수 초기화
-        Logger._lastStreamingNode = null;
-        Logger._accumulatedOutput = '';
+        // 노드 스트리밍 상태 초기화
+        nodeState.isStreaming = false;
+        nodeState.accumulatedOutput = '';
+
+        // 활성 노드 목록에서 제거
+        const index = Logger._activeStreamingNodes.indexOf(nodeName);
+        if (index !== -1) {
+          Logger._activeStreamingNodes.splice(index, 1);
+        }
       }
+
+      // 안정성을 위해 지연된 정리 작업 설정 (혹시 모를 dangling 스트림 방지)
+      const cleanupTimer = setTimeout(() => {
+        Logger._nodeStreamingStates.delete(nodeName);
+        Logger._streamCleanupTimers.delete(nodeName);
+
+        // 열려있는 스트림이 없으면 스트림 처리 완료되었다는 메시지 출력
+        if (Logger._activeStreamingNodes.length === 0 &&
+            Logger._nodeStreamingStates.size === 0 &&
+            // 중복 출력 방지를 위한 플래그 추가
+            !Logger._hasShownCompletionMessage) {
+          // 중복 출력 방지 플래그 설정
+          Logger._hasShownCompletionMessage = true;
+          console.log(chalk.cyan('\n--- AI 응답 스트림 완료됨 ---\n'));
+
+          // 표준 출력 스트림 상태 확인 및 강제 정리 (실험적)
+          if (process.stdout.writable && typeof process.stdout.uncork === 'function') {
+            process.stdout.uncork();
+          }
+
+          // 입력 프롬프트 활성화를 위한 타이밍 조정
+          setTimeout(() => {
+            // 표준 입력이 TTY인 경우에만 입력 모드 관련 처리
+            if (process.stdin.isTTY) {
+              // 입력 스트림 재설정
+              process.stdin.resume();
+              // 커서 보이기
+              process.stdout.write('\u001B[?25h');
+            }
+
+            // 1초 후 중복 출력 방지 플래그 초기화 (다음 스트림을 위해)
+            setTimeout(() => {
+              Logger._hasShownCompletionMessage = false;
+            }, 1000);
+          }, 100);
+        }
+      }, 500); // 0.5초 지연
+
+      // 타이머 저장
+      Logger._streamCleanupTimers.set(nodeName, cleanupTimer);
 
       // 모델 종료 이벤트 방출
       Logger._eventManager.emit({
@@ -390,8 +533,16 @@ export class Logger {
     } catch (error) {
       console.error(chalk.red(`[Logger] Error in nodeModelEnd for ${nodeName}:`), error);
       // 오류가 발생해도 안전하게 상태 초기화
-      Logger._lastStreamingNode = null;
-      Logger._accumulatedOutput = '';
+      Logger._nodeStreamingStates.delete(nodeName);
+
+      // 활성 노드 목록에서 제거
+      const index = Logger._activeStreamingNodes.indexOf(nodeName);
+      if (index !== -1) {
+        Logger._activeStreamingNodes.splice(index, 1);
+      }
+
+      // 락 강제 해제
+      Logger._streamingLock = false;
     }
   }
 
@@ -555,9 +706,99 @@ export class Logger {
    * Generated by Copilot
    */
   public static cleanup(): void {
+    // 설정 변경 리스너 제거
     if (Logger._configChangeRemover) {
       Logger._configChangeRemover();
       Logger._configChangeRemover = null;
+    }
+
+    // 모든 스트림 강제 종료
+    Logger.forceCloseAllStreams();
+
+    // 모든 타이머 제거
+    for (const timer of Logger._streamCleanupTimers.values()) {
+      clearTimeout(timer);
+    }
+    Logger._streamCleanupTimers.clear();
+  }
+
+  /**
+   * 모든 활성 스트림을 강제로 종료합니다.
+   * 애플리케이션 종료 시나 스트림 문제 해결을 위한 유틸리티 함수입니다.
+   *
+   * Generated by Copilot
+   */
+  public static forceCloseAllStreams(): void {
+    try {
+      // 이미 모든 스트림이 정리된 경우 추가 처리 방지
+      if (Logger._activeStreamingNodes.length === 0 &&
+          Logger._nodeStreamingStates.size === 0) {
+        return;
+      }
+
+      // 모든 활성 스트림 정리
+      for (const nodeName of Logger._activeStreamingNodes) {
+        console.log(chalk.yellow(`\n[${nodeName} 스트림 강제 종료]\n`));
+
+        // 정리 타이머가 있으면 제거
+        if (Logger._streamCleanupTimers.has(nodeName)) {
+          clearTimeout(Logger._streamCleanupTimers.get(nodeName));
+          Logger._streamCleanupTimers.delete(nodeName);
+        }
+      }
+
+      // 모든 상태 초기화
+      Logger._nodeStreamingStates.clear();
+      Logger._activeStreamingNodes = [];
+      Logger._streamCleanupTimers.clear();
+      Logger._streamingLock = false;
+
+      // 중복 출력을 방지하기 위한 조건 검사
+      if (!Logger._hasShownCompletionMessage) {
+        // 모든 스트림이 종료되었다는 메시지 출력
+        console.log(chalk.cyan('\n--- 모든 AI 응답 스트림이 강제 종료됨 ---\n'));
+        Logger._hasShownCompletionMessage = true;
+
+        // 입력 모드 재설정을 위한 지연
+        setTimeout(() => {
+          Logger._hasShownCompletionMessage = false;
+        }, 1000);
+      }
+
+      // 표준 출력 스트림 강제 정리 (실험적)
+      if (process.stdout.writable) {
+        if (typeof process.stdout.uncork === 'function') {
+          process.stdout.uncork();
+        }
+        // flush 메소드는 TypeScript 타입에서 인식되지 않으므로 타입 단언 사용
+        const stdoutAny = process.stdout as any;
+        if (typeof stdoutAny.flush === 'function') {
+          stdoutAny.flush();
+        }
+      }
+
+      // 입력 프롬프트 활성화
+      // 약간 지연된 처리로 출력 버퍼가 모두 처리된 후에 입력 모드 설정
+      setTimeout(() => {
+        if (process.stdin.isTTY && process.stdout.isTTY) {
+          // 터미널이 TTY 모드인 경우에만 처리
+          try {
+            // 입력 스트림 재설정
+            process.stdin.resume();
+            // 커서 보이기
+            process.stdout.write('\u001B[?25h');
+            // 입력 모드가 raw 모드인 경우 토글하여 초기화 (필요 시)
+            if (process.stdin.isRaw) {
+              process.stdin.setRawMode(false);
+              process.stdin.setRawMode(true);
+            }
+          } catch (e) {
+            // stdin/stdout 조작 중 오류는 무시
+          }
+        }
+      }, 200);
+    } catch (error) {
+      console.error(chalk.red('[Logger] Error while force closing all streams:'), error);
     }
   }
 }
