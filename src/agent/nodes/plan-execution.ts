@@ -28,12 +28,14 @@ For each potential tool, provide a list of appropriate available tools it can be
 Format your response as a valid JSON object where keys are potential tool names and values are arrays of available tool names.
 For any unfamiliar tool, map it to the ExecuteCommandTool as a fallback since it can execute various commands.
 
-Example output format:
+Example output format (this is just an example, don't use these exact values):
+\`\`\`
 {
   "Code Editor": ["WriteToFileTool"],
   "Terminal": ["ExecuteCommandTool"],
   "File Explorer": ["ListFilesTool", "SearchFilesTool"]
-}`;
+}
+\`\`\``;
 
 // 서브태스크 세분화 프롬프트 템플릿
 // Subtask refinement prompt template
@@ -59,7 +61,8 @@ Each refined subtask should include:
 
 Format your response as a valid JSON array of the refined subtasks.
 
-Example of refined subtask structure:
+Example of refined subtask structure (this is just an example, don't use these exact values):
+\`\`\`
 [
   {
     "id": "1.1",
@@ -73,7 +76,8 @@ Example of refined subtask structure:
     "potential_tools": ["Code Editor"],
     "dependencies": ["1.1"]
   }
-]`;
+]
+\`\`\``;
 
 /**
  * 잠재적 도구들을 실제 사용 가능한 도구로 매핑합니다.
@@ -98,44 +102,56 @@ async function mapToolsUsingAI(potentialTools: string[], model: any): Promise<Re
 
     // 프롬프트 생성
     const prompt = ChatPromptTemplate.fromTemplate(TOOL_MAPPING_PROMPT);
-    const promptMessages = await prompt.formatMessages({
-      potential_tools: potentialToolsText
-    });
 
-    // 모델 호출 설정
-    const config: RunnableConfig = {
-      configurable: { model }
-    };
-
-    Logger.nodeAction('planExecution', 'Calling AI for tool mapping');
-
-    // AI 모델 호출
-    const response = await model.invoke(promptMessages, config);
-    const resultContent = response.content;
-
-    // JSON 파싱
-    let toolMapping: Record<string, string[]>;
     try {
-      // JSON 형식 추출 시도
-      const jsonMatch = resultContent.match(/```json\n([\s\S]*?)\n```/) ||
-                        resultContent.match(/```\n([\\s\S]*?)\n```/) ||
-                        resultContent.match(/{[\s\S]*?}/);
+      const promptMessages = await prompt.formatMessages({
+        potential_tools: potentialToolsText
+      });
 
-      if (jsonMatch) {
-        toolMapping = JSON.parse(jsonMatch[0].startsWith('{') ? jsonMatch[0] : jsonMatch[1]);
-      } else {
-        toolMapping = JSON.parse(resultContent);
+      // 모델 호출 설정
+      const config: RunnableConfig = {
+        configurable: { model }
+      };
+
+      Logger.nodeAction('planExecution', 'Calling AI for tool mapping');
+
+      // AI 모델 호출
+      const response = await model.invoke(promptMessages, config);
+      const resultContent = response.content;
+
+      // JSON 파싱
+      try {
+        // JSON 형식 추출 시도
+        const jsonMatch = resultContent.match(/```(?:json)?\s*\n([\s\S]*?)\n```/) ||
+                          resultContent.match(/{[\s\S]*?}/);
+
+        let toolMapping: Record<string, string[]>;
+        if (jsonMatch) {
+          const jsonText = jsonMatch[1] || jsonMatch[0];
+          toolMapping = JSON.parse(jsonText);
+        } else {
+          toolMapping = JSON.parse(resultContent);
+        }
+
+        Logger.nodeAction('planExecution', `Successfully mapped ${Object.keys(toolMapping).length} tools`);
+        return toolMapping;
+      } catch (error) {
+        Logger.error('Failed to parse AI tool mapping response', error);
+
+        // 파싱 실패 시 기본 매핑 반환
+        const defaultMapping: Record<string, string[]> = {};
+        for (const tool of potentialTools) {
+          defaultMapping[tool] = ["ExecuteCommandTool"]; // 기본값으로 ExecuteCommandTool 사용
+        }
+        return defaultMapping;
       }
+    } catch (formatError) {
+      Logger.error('Error formatting tool mapping prompt template', formatError);
 
-      Logger.nodeAction('planExecution', `Successfully mapped ${Object.keys(toolMapping).length} tools`);
-      return toolMapping;
-    } catch (error) {
-      Logger.error('Failed to parse AI tool mapping response', error);
-
-      // 파싱 실패 시 기본 매핑 반환
+      // 프롬프트 포맷팅 실패 시 기본 매핑 반환
       const defaultMapping: Record<string, string[]> = {};
       for (const tool of potentialTools) {
-        defaultMapping[tool] = ["ExecuteCommandTool"]; // 기본값으로 ExecuteCommandTool 사용
+        defaultMapping[tool] = ["ExecuteCommandTool"];
       }
       return defaultMapping;
     }
@@ -174,55 +190,62 @@ async function refineSubtasksUsingAI(subtasks: any[], model: any): Promise<any[]
 
     // 프롬프트 생성
     const prompt = ChatPromptTemplate.fromTemplate(SUBTASK_REFINEMENT_PROMPT);
-    const promptMessages = await prompt.formatMessages({
-      subtasks: subtasksJson
-    });
 
-    // 모델 호출 설정
-    const config: RunnableConfig = {
-      configurable: { model }
-    };
-
-    Logger.nodeAction('planExecution', 'Calling AI for subtask refinement');
-
-    // AI 모델 호출
-    const response = await model.invoke(promptMessages, config);
-    const resultContent = response.content;
-
-    // JSON 파싱
     try {
-      // JSON 형식 추출 시도
-      const jsonMatch = resultContent.match(/```json\n([\s\S]*?)\n```/) ||
-                        resultContent.match(/```\n([\\s\S]*?)\n```/) ||
-                        resultContent.match(/(\[[\s\S]*?\])/);
+      const promptMessages = await prompt.formatMessages({
+        subtasks: subtasksJson
+      });
 
-      let refinedSubtasks: any[];
-      if (jsonMatch) {
-        refinedSubtasks = JSON.parse(jsonMatch[0].startsWith('[') ? jsonMatch[0] : jsonMatch[1]);
-      } else {
-        refinedSubtasks = JSON.parse(resultContent);
+      // 모델 호출 설정
+      const config: RunnableConfig = {
+        configurable: { model }
+      };
+
+      Logger.nodeAction('planExecution', 'Calling AI for subtask refinement');
+
+      // AI 모델 호출
+      const response = await model.invoke(promptMessages, config);
+      const resultContent = response.content;
+
+      // JSON 파싱
+      try {
+        // JSON 형식 추출 시도
+        const jsonMatch = resultContent.match(/```(?:json)?\s*\n([\s\S]*?)\n```/) ||
+                          resultContent.match(/\[[\s\S]*?\]/);
+
+        let refinedSubtasks: any[];
+        if (jsonMatch) {
+          const jsonText = jsonMatch[1] || jsonMatch[0];
+          refinedSubtasks = JSON.parse(jsonText);
+        } else {
+          refinedSubtasks = JSON.parse(resultContent);
+        }
+
+        // 세분화된 서브태스크 유효성 검증
+        if (!Array.isArray(refinedSubtasks)) {
+          throw new Error('AI response is not a valid array');
+        }
+
+        // 필수 필드 검증
+        const validSubtasks = refinedSubtasks.filter(task =>
+          task && task.id && task.description &&
+          Array.isArray(task.potential_tools) && Array.isArray(task.dependencies)
+        );
+
+        if (validSubtasks.length < refinedSubtasks.length) {
+          Logger.error(`Some refined subtasks (${refinedSubtasks.length - validSubtasks.length}) are invalid and will be filtered out`);
+        }
+
+        Logger.nodeAction('planExecution', `Successfully refined subtasks from ${subtasks.length} to ${validSubtasks.length}`);
+        return validSubtasks;
+      } catch (error) {
+        Logger.error('Failed to parse AI subtask refinement response', error);
+        // 파싱 실패 시 원래 서브태스크 반환
+        return subtasks;
       }
-
-      // 세분화된 서브태스크 유효성 검증
-      if (!Array.isArray(refinedSubtasks)) {
-        throw new Error('AI response is not a valid array');
-      }
-
-      // 필수 필드 검증
-      const validSubtasks = refinedSubtasks.filter(task =>
-        task && task.id && task.description &&
-        Array.isArray(task.potential_tools) && Array.isArray(task.dependencies)
-      );
-
-      if (validSubtasks.length < refinedSubtasks.length) {
-        Logger.error(`Some refined subtasks (${refinedSubtasks.length - validSubtasks.length}) are invalid and will be filtered out`);
-      }
-
-      Logger.nodeAction('planExecution', `Successfully refined subtasks from ${subtasks.length} to ${validSubtasks.length}`);
-      return validSubtasks;
-    } catch (error) {
-      Logger.error('Failed to parse AI subtask refinement response', error);
-      // 파싱 실패 시 원래 서브태스크 반환
+    } catch (formatError) {
+      Logger.error('Error formatting subtask refinement prompt template', formatError);
+      // 프롬프트 포맷팅 실패 시 원래 서브태스크 반환
       return subtasks;
     }
   } catch (error) {
@@ -386,22 +409,78 @@ export async function nodePlanExecution(state: State): Promise<Update> {
       };
     }
 
-    // Step 1: AI를 사용하여 서브태스크 세분화
-    // Step 1: Refine subtasks using AI
-    Logger.nodeAction('planExecution', 'Refining subtasks into more detailed steps');
-    const refinedSubtasks = await refineSubtasksUsingAI(taskAnalysis.subtasks, state.context.model);
+    // 재구성된 태스크 분석 생성 (안전한 접근으로 변경)
+    // Create restructured task analysis with a safe approach
+    let restructuredTaskAnalysis: TaskAnalysis;
 
-    // Step 2: AI를 사용하여 잠재적 도구를 실제 사용 가능한 도구로 매핑
-    // Step 2: Map potential tools to actually available tools using AI
-    Logger.nodeAction('planExecution', 'Mapping potential tools to available tools');
-    const mappedSubtasks = await mapSubtaskToolsUsingAI(refinedSubtasks, state.context.model);
+    try {
+      // Step 1: AI를 사용하여 서브태스크 세분화 시도
+      // Step 1: Try to refine subtasks using AI
+      Logger.nodeAction('planExecution', 'Refining subtasks into more detailed steps');
+      let refinedSubtasks = taskAnalysis.subtasks;
 
-    // 재구성된 태스크 분석 생성
-    // Create restructured task analysis
-    const restructuredTaskAnalysis = {
-      ...taskAnalysis,
-      subtasks: mappedSubtasks
-    } as TaskAnalysis;
+      try {
+        const aiRefinedSubtasks = await refineSubtasksUsingAI(taskAnalysis.subtasks, state.context.model);
+        if (aiRefinedSubtasks && aiRefinedSubtasks.length > 0) {
+          refinedSubtasks = aiRefinedSubtasks;
+          Logger.nodeAction('planExecution', `Successfully refined ${refinedSubtasks.length} subtasks`);
+        } else {
+          Logger.nodeAction('planExecution', 'Using original subtasks as refinement failed');
+        }
+      } catch (refinementError) {
+        Logger.error('Failed to refine subtasks, continuing with original subtasks', refinementError);
+      }
+
+      // Step 2: AI를 사용하여 잠재적 도구를 실제 사용 가능한 도구로 매핑 시도
+      // Step 2: Try to map potential tools to actually available tools using AI
+      Logger.nodeAction('planExecution', 'Mapping potential tools to available tools');
+      let mappedSubtasks = refinedSubtasks;
+
+      try {
+        const aiMappedSubtasks = await mapSubtaskToolsUsingAI(refinedSubtasks, state.context.model);
+        if (aiMappedSubtasks && aiMappedSubtasks.length > 0) {
+          mappedSubtasks = aiMappedSubtasks;
+          Logger.nodeAction('planExecution', `Successfully mapped tools for ${mappedSubtasks.length} subtasks`);
+        } else {
+          Logger.nodeAction('planExecution', 'Using refined subtasks as mapping failed');
+        }
+      } catch (mappingError) {
+        Logger.error('Failed to map tools, adding default tools', mappingError);
+        // 매핑 실패 시 기본 도구 추가
+        // 안전한 복사 및 타입 확인을 통한 도구 추가
+        mappedSubtasks = refinedSubtasks.map((subtask: Record<string, any>) => {
+          // 원본 서브태스크의 모든 속성을 유지하면서 깊은 복사 수행
+          const updatedSubtask = { ...JSON.parse(JSON.stringify(subtask)) };
+
+          // 실제 도구 배열 추가
+          updatedSubtask.actual_tools = ["ExecuteCommandTool", "WriteToFileTool", "ReadFileTool"];
+
+          return updatedSubtask;
+        });
+      }
+
+      // 재구성된 태스크 분석 생성
+      restructuredTaskAnalysis = {
+        ...JSON.parse(JSON.stringify(taskAnalysis)), // 깊은 복사를 통한 안전한 객체 생성
+        subtasks: mappedSubtasks
+      } as TaskAnalysis;
+
+    } catch (processingError) {
+      Logger.error('Error during task preprocessing', processingError);
+      // 오류 발생 시 원본 태스크에 기본 도구 추가
+      restructuredTaskAnalysis = {
+        ...JSON.parse(JSON.stringify(taskAnalysis)), // 깊은 복사를 통한 안전한 객체 생성
+        subtasks: taskAnalysis.subtasks.map((subtask: Record<string, any>) => {
+          // 원본 서브태스크의 모든 속성을 유지하면서 깊은 복사 수행
+          const updatedSubtask = { ...JSON.parse(JSON.stringify(subtask)) };
+
+          // 실제 도구 배열 추가
+          updatedSubtask.actual_tools = ["ExecuteCommandTool", "WriteToFileTool", "ReadFileTool"];
+
+          return updatedSubtask;
+        })
+      } as TaskAnalysis;
+    }
 
     Logger.graphState('Restructured Task Analysis', restructuredTaskAnalysis);
 
@@ -472,12 +551,14 @@ export async function nodePlanExecution(state: State): Promise<Update> {
     Logger.nodeAction('planExecution', 'Parsing execution plan');
     let executionPlan: ExecutionPlan;
     try {
-      const jsonMatch = resultContent.match(/```json\n([\s\S]*?)\n```/) ||
-                        resultContent.match(/```\n([\\s\S]*?)\n```/) ||
+      // 정규식 개선: JSON 형식 추출을 위한 더 견고한 패턴
+      const jsonMatch = resultContent.match(/```(?:json)?\s*\n([\s\S]*?)\n```/) ||
+                        resultContent.match(/```([\s\S]*?)```/) ||
                         resultContent.match(/({[\s\S]*})/);
 
       if (jsonMatch) {
-        executionPlan = JSON.parse(jsonMatch[0].startsWith('{') ? jsonMatch[0] : jsonMatch[1]);
+        const jsonContent = jsonMatch[1] || jsonMatch[0];
+        executionPlan = JSON.parse(jsonContent.trim());
       } else {
         executionPlan = JSON.parse(resultContent);
       }
