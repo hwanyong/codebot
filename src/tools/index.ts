@@ -5,7 +5,7 @@ import { ListFilesTool } from './fileSystem/listFiles.js';
 import { SearchFilesTool } from './fileSystem/searchFiles.js';
 import { ExecuteCommandTool } from './terminal/executeCommand.js';
 import { StoreMemoryTool, RetrieveMemoryTool } from './context/memory.js';
-import { TranslateTextTool } from './translate/translateText.js';
+// import { TranslateTextTool } from './translate/translateText.js';
 
 /**
  * 도구 레지스트리에 모든 도구를 등록합니다.
@@ -27,7 +27,7 @@ export function registerTools(registry: ToolRegistry, memoryStore: Map<string, a
   registry.registerTool(new RetrieveMemoryTool(memoryStore));
 
   // 번역 도구 등록
-  registry.registerTool(new TranslateTextTool());
+  // registry.registerTool(new TranslateTextTool());
 }
 
 // 도구 내보내기
@@ -38,4 +38,4 @@ export { ListFilesTool } from './fileSystem/listFiles.js';
 export { SearchFilesTool } from './fileSystem/searchFiles.js';
 export { ExecuteCommandTool } from './terminal/executeCommand.js';
 export { StoreMemoryTool, RetrieveMemoryTool } from './context/memory.js';
-export { TranslateTextTool } from './translate/translateText.js';
+// export { TranslateTextTool } from './translate/translateText.js';
