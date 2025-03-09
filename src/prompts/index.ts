@@ -57,18 +57,18 @@ If it requires tools or complex execution:
 - For each subtask, determine what needs to be done, what tools might be needed, and dependencies
 
 Respond in JSON format:
-{
+{{
   "task_type": "simple_response | code_creation | code_modification | code_analysis | environment_setup",
   "requires_tools": true/false,
   "subtasks": [
-    {
+    {{
       "id": "1",
       "description": "...",
       "potential_tools": ["...", "..."],
       "dependencies": ["..."]
-    }
+    }}
   ]
-}`;
+}}`;
 /* 한국어 번역:
 당신은 Codebot, 전문 코딩 어시스턴트입니다.
 당신의 임무는 사용자의 요청을 분석하고 논리적인 하위 작업으로 분류하는 것입니다.
