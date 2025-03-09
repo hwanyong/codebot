@@ -20,7 +20,7 @@ export const LOGGER_DEFAULTS = {
     'analyzeTask',
     'executeStep',
     'generateResponse',
-    'planExecution', 
+    'planExecution',
     'verifyResult'
   ]
 };

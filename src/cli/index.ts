@@ -547,6 +547,9 @@ function resetTerminalState(rl: readline.Interface): void {
 export function createCLI(): Command {
   const program = new Command();
 
+  // Logger 초기화 - 설정 파일에서 기본값 로드
+  Logger.initialize();
+
   program
     .name('codebot')
     .description('AI-based coding assistant CLI') // AI 기반 코딩 어시스턴트 CLI
@@ -599,6 +602,16 @@ export function createCLI(): Command {
           nodeStreamConfig[node] = false;
         });
       }
+
+      // Logger 설정 업데이트 - 명령줄 옵션으로 구성
+      Logger.configure({
+        verbose: !!options.verbose,
+        debug: !!options.debug,
+        aiStream: !!options.aiStream,  // 명시적으로 설정된 경우에만 설정 파일 값 덮어씀
+        graphState: !!options.debug,
+        tools: true,
+        nodeStreamConfig
+      }, true); // true: 명령줄 옵션으로 설정됨을 표시
 
       // 설정 파일에서 로깅 설정 가져오기
       const loggingConfig = configManager.getLoggingConfig();
@@ -696,6 +709,16 @@ export function createCLI(): Command {
           nodeStreamConfig[node] = false;
         });
       }
+
+      // Logger 설정 업데이트 - 명령줄 옵션으로 구성
+      Logger.configure({
+        verbose: !!options.verbose,
+        debug: !!options.debug,
+        aiStream: !!options.aiStream,  // 명시적으로 설정된 경우에만 설정 파일 값 덮어씀
+        graphState: !!options.debug,
+        tools: true,
+        nodeStreamConfig
+      }, true); // true: 명령줄 옵션으로 설정됨을 표시
 
       // 설정 파일에서 로깅 설정 가져오기
       const loggingConfig = configManager.getLoggingConfig();
@@ -855,6 +878,23 @@ export function createCLI(): Command {
     console.error(chalk.red('Uncaught exception:')); // 처리되지 않은 예외:
     console.error(error);
     process.exit(1);
+  });
+
+  // 프로그램 종료 전에 리소스 정리를 위한 이벤트 리스너 추가
+  process.on('exit', () => {
+    // 종료 시 Logger와 ConfigManager 리소스 정리
+    Logger.cleanup();
+    ConfigManager.getInstance().cleanup();
+  });
+
+  // 특정 시그널에 대한 핸들러도 추가
+  ['SIGINT', 'SIGTERM', 'SIGHUP'].forEach(signal => {
+    process.on(signal, () => {
+      // 시그널을 받으면 리소스 정리 후 종료
+      Logger.cleanup();
+      ConfigManager.getInstance().cleanup();
+      process.exit(0);
+    });
   });
 
   return program;
