@@ -555,6 +555,436 @@ export const cliMessages: I18nMessages = {
   'log_tool_result': {
     ko: '도구 결과',
     en: 'TOOL RESULT'
+  },
+
+  // 테스트 명령어
+  'cmd_test_desc': {
+    ko: '도구 테스트를 실행합니다.',
+    en: 'Run tests for Codebot tools.'
+  },
+  'cmd_tool_desc': {
+    ko: '도구를 직접 실행합니다.',
+    en: 'Run tools directly.'
+  },
+  'test_error': {
+    ko: '테스트 실행 중 오류가 발생했습니다: {0}',
+    en: 'Error occurred while running tests: {0}'
+  },
+  'tool_execution_error': {
+    ko: '도구 실행 중 오류가 발생했습니다: {0}',
+    en: 'Error occurred while executing tool: {0}'
+  },
+  'tool_not_found': {
+    ko: '도구를 찾을 수 없습니다: {0} (카테고리: {1})',
+    en: 'Tool not found: {0} (category: {1})'
+  },
+  'invalid_json_params': {
+    ko: '잘못된 JSON 파라미터: {0}',
+    en: 'Invalid JSON parameters: {0}'
+  },
+
+  // 테스트 실행 관련 메시지
+  'test_invalid_category': {
+    ko: '유효하지 않은 테스트 카테고리입니다.',
+    en: 'Invalid test category.'
+  },
+  'test_duplicate_category': {
+    ko: '중복된 테스트 카테고리: {0}',
+    en: 'Duplicate test category: {0}'
+  },
+  'test_category_not_found': {
+    ko: '테스트 카테고리를 찾을 수 없습니다: {0}',
+    en: 'Test category not found: {0}'
+  },
+  'test_not_found': {
+    ko: '테스트를 찾을 수 없습니다: {0} (카테고리: {1})',
+    en: 'Test not found: {0} (category: {1})'
+  },
+  'test_running_category': {
+    ko: '테스트 카테고리 실행 중: {0}',
+    en: 'Running test category: {0}'
+  },
+  'test_running': {
+    ko: '테스트 실행 중',
+    en: 'Running test'
+  },
+  'test_passed': {
+    ko: '통과',
+    en: 'passed'
+  },
+  'test_failed': {
+    ko: '실패',
+    en: 'failed'
+  },
+  'test_summary': {
+    ko: '테스트 요약: {0}개 중 {1}개 통과, {2}개 실패',
+    en: 'Test summary: {0} tests, {1} passed, {2} failed'
+  },
+  'test_running_all': {
+    ko: '모든 테스트 실행 중',
+    en: 'Running all tests'
+  },
+  'test_category': {
+    ko: '카테고리',
+    en: 'Category'
+  },
+  'test_results': {
+    ko: '테스트 결과',
+    en: 'Test results'
+  },
+  'test_summary_all': {
+    ko: '전체 테스트 요약: {0}개 중 {1}개 통과, {2}개 실패',
+    en: 'Overall test summary: {0} tests, {1} passed, {2} failed'
+  },
+  'test_log_header': {
+    ko: '테스트 실행 결과 - {0}',
+    en: 'Test Run Results - {0}'
+  },
+  'test_log_written': {
+    ko: '테스트 결과가 파일에 저장되었습니다: {0}',
+    en: 'Test results written to file: {0}'
+  },
+  'test_log_error': {
+    ko: '테스트 결과 로깅 오류: {0}',
+    en: 'Error logging test results: {0}'
+  },
+  'test_overall_summary': {
+    ko: '전체 테스트 요약',
+    en: 'Overall Test Summary'
+  },
+  'test_complete_summary': {
+    ko: '종합 요약',
+    en: 'Complete Summary'
+  },
+  'test_total': {
+    ko: '테스트',
+    en: 'tests'
+  },
+  'test_categories': {
+    ko: '테스트 카테고리',
+    en: 'Test Categories'
+  },
+  'select_test_category': {
+    ko: '테스트 카테고리를 선택하세요',
+    en: 'Select a test category'
+  },
+  'run_all_tests': {
+    ko: '모든 테스트 실행',
+    en: 'Run all tests'
+  },
+  'exit': {
+    ko: '종료',
+    en: 'Exit'
+  },
+  'test_exit': {
+    ko: '테스트 메뉴를 종료합니다.',
+    en: 'Exiting test menu.'
+  },
+
+  // 파일 시스템 테스트
+  'test_file_count_mismatch': {
+    ko: '파일 개수가 일치하지 않습니다. 예상: {0}, 실제: {1}',
+    en: 'File count mismatch. Expected: {0}, Actual: {1}'
+  },
+  'test_recursive_file_count_mismatch': {
+    ko: '재귀적 파일 개수가 일치하지 않습니다. 예상: {0}, 실제: {1}',
+    en: 'Recursive file count mismatch. Expected: {0}, Actual: {1}'
+  },
+  'test_list_files_success': {
+    ko: '파일 목록 조회 테스트 성공',
+    en: 'List files test successful'
+  },
+  'test_content_mismatch': {
+    ko: '파일 내용이 일치하지 않습니다.',
+    en: 'File content mismatch.'
+  },
+  'test_read_file_success': {
+    ko: '파일 읽기 테스트 성공',
+    en: 'Read file test successful'
+  },
+  'test_write_content_mismatch': {
+    ko: '작성된 파일 내용이 일치하지 않습니다.',
+    en: 'Written file content mismatch.'
+  },
+  'test_write_file_success': {
+    ko: '파일 쓰기 테스트 성공',
+    en: 'Write file test successful'
+  },
+  'test_error_handling_failed': {
+    ko: '{0}의 오류 처리가 실패했습니다.',
+    en: 'Error handling failed for {0}.'
+  },
+  'test_error_handling_success': {
+    ko: '오류 처리 테스트 성공',
+    en: 'Error handling test successful'
+  },
+
+  // 터미널 테스트
+  'test_command_output_mismatch': {
+    ko: '명령어 출력이 예상과 일치하지 않습니다.',
+    en: 'Command output does not match expected.'
+  },
+  'test_basic_command_success': {
+    ko: '기본 명령어 테스트 성공',
+    en: 'Basic command test successful'
+  },
+  'test_env_var_not_found': {
+    ko: '환경 변수 {0}을(를) 출력에서 찾을 수 없습니다.',
+    en: 'Environment variable {0} not found in output.'
+  },
+  'test_env_var_success': {
+    ko: '환경 변수 테스트 성공',
+    en: 'Environment variable test successful'
+  },
+  'test_working_dir_mismatch': {
+    ko: '작업 디렉토리가 일치하지 않습니다. 예상: {0}, 실제: {1}',
+    en: 'Working directory mismatch. Expected: {0}, Actual: {1}'
+  },
+  'test_working_dir_success': {
+    ko: '작업 디렉토리 테스트 성공',
+    en: 'Working directory test successful'
+  },
+
+  // 컨텍스트 테스트
+  'test_context_invalid': {
+    ko: '유효하지 않은 컨텍스트 객체입니다.',
+    en: 'Invalid context object.'
+  },
+  'test_get_context_success': {
+    ko: '컨텍스트 조회 테스트 성공',
+    en: 'Get context test successful'
+  },
+  'test_context_data_not_found': {
+    ko: '컨텍스트에서 데이터를 찾을 수 없습니다: {0}',
+    en: 'Data not found in context: {0}'
+  },
+  'test_add_context_success': {
+    ko: '컨텍스트 추가 테스트 성공',
+    en: 'Add to context test successful'
+  },
+  'test_complex_data_integrity_failed': {
+    ko: '복잡한 데이터 무결성 검증 실패',
+    en: 'Complex data integrity verification failed'
+  },
+  'test_complex_data_success': {
+    ko: '복잡한 데이터 테스트 성공',
+    en: 'Complex data test successful'
+  },
+
+  // 번역 테스트
+  'test_translation_empty': {
+    ko: '번역 결과가 비어 있습니다.',
+    en: 'Translation result is empty.'
+  },
+  'test_translation_not_english': {
+    ko: '번역 결과가 영어가 아닙니다.',
+    en: 'Translation result is not English.'
+  },
+  'test_translate_ko_en_success': {
+    ko: '한국어-영어 번역 테스트 성공',
+    en: 'Korean to English translation test successful'
+  },
+  'test_translation_not_korean': {
+    ko: '번역 결과가 한국어가 아닙니다.',
+    en: 'Translation result is not Korean.'
+  },
+  'test_translate_en_ko_success': {
+    ko: '영어-한국어 번역 테스트 성공',
+    en: 'English to Korean translation test successful'
+  },
+
+  // 도구 실행 시스템
+  'no_categories_available': {
+    ko: '사용 가능한 카테고리가 없습니다.',
+    en: 'No categories available.'
+  },
+  'select_category': {
+    ko: '카테고리를 선택하세요:',
+    en: 'Select a category:'
+  },
+  'enter_number': {
+    ko: '번호를 입력하세요',
+    en: 'Enter number'
+  },
+  'no_tools_available': {
+    ko: '사용 가능한 도구가 없습니다.',
+    en: 'No tools available.'
+  },
+  'select_tool': {
+    ko: '도구를 선택하세요:',
+    en: 'Select a tool:'
+  },
+  'enter_parameters': {
+    ko: '{0} 도구를 위한 파라미터를 입력하세요',
+    en: 'Enter parameters for {0} tool'
+  },
+  'parameters_info': {
+    ko: '도구 실행에 필요한 파라미터를 제공하세요.',
+    en: 'Please provide parameters needed to run the tool.'
+  },
+  'select_input_method': {
+    ko: '파라미터 입력 방식을 선택하세요:',
+    en: 'Select input method:'
+  },
+  'interactive_input': {
+    ko: '대화형 입력 (각 파라미터 개별 입력)',
+    en: 'Interactive input (enter each parameter separately)'
+  },
+  'json_input': {
+    ko: 'JSON 형식 입력 (모든 파라미터를 JSON으로)',
+    en: 'JSON format input (all parameters as JSON)'
+  },
+  'enter_json_parameters': {
+    ko: 'JSON 형식으로 파라미터를 입력하세요:',
+    en: 'Enter parameters in JSON format:'
+  },
+  'json_prompt': {
+    ko: 'JSON 입력 (빈 줄로 완료):',
+    en: 'JSON input (empty line to finish):'
+  },
+  'invalid_json_object': {
+    ko: '유효하지 않은 JSON 객체입니다.',
+    en: 'Invalid JSON object.'
+  },
+  'json_parse_error': {
+    ko: 'JSON 파싱 오류: {0}',
+    en: 'JSON parsing error: {0}'
+  },
+  'try_again': {
+    ko: '다시 시도하시겠습니까?',
+    en: 'Would you like to try again?'
+  },
+  'interactive_parameters': {
+    ko: '각 파라미터를 개별적으로 입력하세요:',
+    en: 'Enter each parameter individually:'
+  },
+  'required': {
+    ko: '필수',
+    en: 'required'
+  },
+  'optional': {
+    ko: '선택사항',
+    en: 'optional'
+  },
+  'parameter_required': {
+    ko: '{0} 파라미터는 필수입니다.',
+    en: 'Parameter {0} is required.'
+  },
+  'invalid_number': {
+    ko: '유효한 숫자가 아닙니다.',
+    en: 'Not a valid number.'
+  },
+  'invalid_integer': {
+    ko: '유효한 정수가 아닙니다.',
+    en: 'Not a valid integer.'
+  },
+  'invalid_boolean': {
+    ko: '유효한 불리언 값이 아닙니다.',
+    en: 'Not a valid boolean value.'
+  },
+  'not_array': {
+    ko: '배열이 아닙니다.',
+    en: 'Not an array.'
+  },
+  'invalid_object': {
+    ko: '유효한 객체가 아닙니다.',
+    en: 'Not a valid object.'
+  },
+  'invalid_json': {
+    ko: '유효한 JSON이 아닙니다.',
+    en: 'Not a valid JSON.'
+  },
+  'invalid_input': {
+    ko: '유효하지 않은 입력: {0}',
+    en: 'Invalid input: {0}'
+  },
+  'parameters_summary': {
+    ko: '입력한 파라미터 요약:',
+    en: 'Parameter summary:'
+  },
+  'confirm_parameters': {
+    ko: '이 파라미터로 도구를 실행하시겠습니까?',
+    en: 'Run tool with these parameters?'
+  },
+  'invalid_yes_no': {
+    ko: '유효한 응답이 아닙니다. y 또는 n을 입력하세요.',
+    en: 'Invalid response. Please enter y or n.'
+  },
+  'run_again': {
+    ko: '다시 실행하시겠습니까?',
+    en: 'Would you like to run again?'
+  },
+  'use_same_tool': {
+    ko: '같은 도구를 사용하시겠습니까?',
+    en: 'Would you like to use the same tool?'
+  },
+  'tool_execution_result': {
+    ko: '도구 실행 결과',
+    en: 'Tool Execution Result'
+  },
+  'tool_info': {
+    ko: '도구 정보',
+    en: 'Tool Information'
+  },
+  'name': {
+    ko: '이름',
+    en: 'Name'
+  },
+  'description': {
+    ko: '설명',
+    en: 'Description'
+  },
+  'category': {
+    ko: '카테고리',
+    en: 'Category'
+  },
+  'parameters': {
+    ko: '파라미터',
+    en: 'Parameters'
+  },
+  'result': {
+    ko: '결과',
+    en: 'Result'
+  },
+  'status': {
+    ko: '상태',
+    en: 'Status'
+  },
+  'success': {
+    ko: '성공',
+    en: 'Success'
+  },
+  'failure': {
+    ko: '실패',
+    en: 'Failure'
+  },
+  'execution_time': {
+    ko: '실행 시간',
+    en: 'Execution Time'
+  },
+  'output_data': {
+    ko: '출력 데이터',
+    en: 'Output Data'
+  },
+  'error': {
+    ko: '오류',
+    en: 'Error'
+  },
+  'unknown_error': {
+    ko: '알 수 없는 오류',
+    en: 'Unknown error'
+  },
+  'empty_object': {
+    ko: '빈 객체',
+    en: 'Empty object'
+  },
+  'json_render_error': {
+    ko: 'JSON 렌더링 오류',
+    en: 'JSON rendering error'
+  },
+  'no_output': {
+    ko: '출력 없음',
+    en: 'No output'
   }
 };
 

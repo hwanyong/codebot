@@ -64,7 +64,7 @@ export class AgentManager {
 
     // Register tools
     // 도구 등록
-    registerTools(this.toolRegistry, this.memoryStore);
+    registerTools(this.toolRegistry);
   }
 
   /**

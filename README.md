@@ -15,6 +15,7 @@ AI-based coding assistant CLI tool. Implements a multi-step reasoning agent usin
 - Execute shell commands
 - Perform complex tasks through multi-step reasoning
 - Interactive CLI interface
+- Tool testing and direct execution capabilities
 
 ## Installation
 
@@ -102,6 +103,37 @@ In interactive mode, you can use the following slash commands:
 - `/clear` - Clear conversation history
 - `/exit` - End the conversation session
 
+### Tool Testing
+You can test various tools provided by Codebot:
+
+```bash
+# Run all tests
+codebot test --all
+
+# Run tests for a specific category
+codebot test --category fileSystem
+
+# Run test for a specific tool
+codebot test --category fileSystem --tool ListFilesTool
+
+# Log test results to a file
+codebot test --all --log --output test-results.log
+
+# Run interactive test menu
+codebot test
+```
+
+### Direct Tool Execution
+You can directly execute Codebot's internal tools and see their results:
+
+```bash
+# Start interactive tool execution mode
+codebot tool
+
+# Run a specific tool directly
+codebot tool --category fileSystem --name ListFilesTool --params '{"path": "./src"}'
+```
+
 ## Development
 
 ### Run in Development Mode
@@ -114,6 +146,18 @@ pnpm dev
 
 ```bash
 pnpm build
+```
+
+### Test Tools
+
+```bash
+pnpm test:tools
+```
+
+### Run Tools Directly (Development Mode)
+
+```bash
+pnpm tool
 ```
 
 ## Project Structure
@@ -130,6 +174,14 @@ src/
 │   └── index.ts     # CLI implementation
 ├── prompts/         # Prompt templates
 │   └── index.ts     # Prompt definitions
+├── test/            # Testing system
+│   ├── cases/       # Tool-specific test cases
+│   ├── runner.ts    # Test runner
+│   └── reporter.ts  # Test result reporter
+├── toolRunner/      # Direct tool execution system
+│   ├── executor.ts  # Tool executor
+│   ├── prompter.ts  # User input handler
+│   └── renderer.ts  # Result visualization
 ├── tools/           # Tool implementations
 │   ├── context/     # Context tools
 │   ├── fileSystem/  # File system tools

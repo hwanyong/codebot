@@ -12,6 +12,8 @@ import { promisify } from 'util';
 import os from 'os';
 import { SpinnerManager } from './spinner-manager.js';
 import { Logger } from '../utils/logger.js';
+import { initializeTestSystem, TestRunner, TestReporter } from '../test/index.js';
+import { initializeToolRunner, ToolExecutor } from '../toolRunner/index.js';
 
 // exec를 Promise로 변환
 const execPromise = promisify(exec);
@@ -872,6 +874,110 @@ export function createCLI(): Command {
       }
     });
 
+  // 테스트 명령어 추가
+  program
+    .command('test')
+    .description(i18n.t('cmd_test_desc') || 'Run tests for Codebot tools')
+    .option('-c, --category <category>', 'Specify the test category to run')
+    .option('-t, --tool <tool>', 'Specify a specific tool test to run')
+    .option('-a, --all', 'Run all tests')
+    .option('-l, --log', 'Log test results to file')
+    .option('-o, --output <file>', 'Specify log file path')
+    .option('-v, --verbose', 'Show verbose test output')
+    .action(async (options) => {
+      try {
+        // 설정 확인
+        await ensureConfig();
+
+        // 테스트 시스템 초기화
+        const testRunner = initializeTestSystem();
+
+        // 테스트 보고자 설정
+        const reporterOptions = {
+          logToFile: options.log || false,
+          logFilePath: options.output || './test-results.log',
+          verbose: options.verbose || false
+        };
+        const testReporter = new TestReporter(reporterOptions);
+
+        const spinnerManager = new SpinnerManager();
+
+        if (options.all) {
+          // 모든 테스트 실행
+          const results = await testRunner.runAll(options.category);
+          testReporter.displayOverallSummary(results);
+
+          // 결과 로깅 (선택 사항)
+          if (options.log) {
+            for (const [categoryName, categoryResults] of Object.entries(results)) {
+              await testReporter.logToFile(categoryResults, categoryName);
+            }
+          }
+        } else if (options.category) {
+          // 특정 카테고리 테스트 실행
+          const results = await testRunner.runCategory(options.category, options.tool);
+
+          // 결과 로깅 (선택 사항)
+          if (options.log) {
+            await testReporter.logToFile(results, options.category);
+          }
+        } else {
+          // 대화형 테스트 메뉴 표시
+          await showTestMenu(testRunner, testReporter, options);
+        }
+      } catch (error) {
+        console.error(chalk.red(i18n.t('test_error', error instanceof Error ? error.message : String(error))));
+      }
+    });
+
+  // 도구 직접 실행 명령어 추가
+  program
+    .command('tool')
+    .description(i18n.t('cmd_tool_desc') || 'Run tools directly')
+    .option('-c, --category <category>', 'Specify the tool category')
+    .option('-n, --name <name>', 'Specify the tool name')
+    .option('-p, --params <json>', 'Tool parameters as JSON string')
+    .action(async (options) => {
+      try {
+        // 설정 확인
+        await ensureConfig();
+
+        // 도구 실행 시스템 초기화
+        const toolExecutor = initializeToolRunner();
+
+        if (options.category && options.name) {
+          // 명령줄에서 직접 도구 실행
+          const tool = toolExecutor.getToolByName(options.category, options.name);
+
+          if (!tool) {
+            throw new Error(i18n.t('tool_not_found', options.name, options.category));
+          }
+
+          // 파라미터 파싱
+          let parameters = {};
+          if (options.params) {
+            try {
+              parameters = JSON.parse(options.params);
+            } catch (error) {
+              throw new Error(i18n.t('invalid_json_params', error instanceof Error ? error.message : String(error)));
+            }
+          }
+
+          // 도구 실행
+          const spinnerManager = new SpinnerManager();
+          const result = await toolExecutor.executeTool(options.category, options.name, parameters);
+
+          // 결과 렌더링 - getRenderer() 메서드 사용
+          toolExecutor.getRenderer().renderResult(tool, parameters, result);
+        } else {
+          // 대화형 모드로 실행
+          await toolExecutor.runInteractive();
+        }
+      } catch (error) {
+        console.error(chalk.red(i18n.t('tool_execution_error', error instanceof Error ? error.message : String(error))));
+      }
+    });
+
   // 전역 오류 처리기
   // Global error handler
   process.on('uncaughtException', (error) => {
@@ -898,4 +1004,68 @@ export function createCLI(): Command {
   });
 
   return program;
+}
+
+/**
+ * 대화형 테스트 메뉴를 표시합니다.
+ * @param testRunner 테스트 실행기
+ * @param testReporter 테스트 보고자
+ * @param options 명령줄 옵션
+ */
+async function showTestMenu(
+  testRunner: TestRunner,
+  testReporter: TestReporter,
+  options: any
+): Promise<void> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: chalk.green('> ')
+  });
+
+  try {
+    // 카테고리 목록 표시
+    const categories = testRunner.getCategories();
+
+    console.log(chalk.cyan(i18n.t('test_categories') || 'Test Categories:'));
+    categories.forEach((category, index) => {
+      console.log(`${index + 1}. ${category.name} - ${category.description}`);
+    });
+    console.log(`${categories.length + 1}. ${i18n.t('run_all_tests') || 'Run all tests'}`);
+    console.log(`${categories.length + 2}. ${i18n.t('exit') || 'Exit'}`);
+
+    // 카테고리 선택 요청
+    const answer = await new Promise<string>(resolve => {
+      rl.question(chalk.green(`${i18n.t('select_test_category') || 'Select a test category'} (1-${categories.length + 2}): `), resolve);
+    });
+
+    const selection = parseInt(answer, 10);
+
+    if (selection >= 1 && selection <= categories.length) {
+      // 선택한 카테고리의 테스트 실행
+      const category = categories[selection - 1];
+      const results = await testRunner.runCategory(category.name);
+
+      // 결과 로깅 (선택 사항)
+      if (options.log) {
+        await testReporter.logToFile(results, category.name);
+      }
+    } else if (selection === categories.length + 1) {
+      // 모든 테스트 실행
+      const results = await testRunner.runAll();
+      testReporter.displayOverallSummary(results);
+
+      // 결과 로깅 (선택 사항)
+      if (options.log) {
+        for (const [categoryName, categoryResults] of Object.entries(results)) {
+          await testReporter.logToFile(categoryResults, categoryName);
+        }
+      }
+    } else {
+      // 종료
+      console.log(chalk.yellow(i18n.t('test_exit') || 'Exiting test menu.'));
+    }
+  } finally {
+    rl.close();
+  }
 }

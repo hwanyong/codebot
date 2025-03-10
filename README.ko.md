@@ -15,6 +15,7 @@ AI 기반 코딩 어시스턴트 CLI 도구입니다. LangGraph를 사용하여 
 - 쉘 명령어 실행
 - 다단계 추론을 통한 복잡한 작업 수행
 - 대화형 CLI 인터페이스
+- 도구 테스트 및 단독 실행 기능
 
 ## 설치
 
@@ -102,6 +103,37 @@ codebot run "파일 검색 및 내용 분석" --model gpt-4 --provider openai
 - `/clear` - 대화 기록 지우기
 - `/exit` - 대화 세션 종료
 
+### 도구 테스트
+Codebot에서 제공하는 다양한 도구들을 테스트할 수 있습니다:
+
+```bash
+# 모든 테스트 실행
+codebot test --all
+
+# 특정 카테고리의 테스트 실행
+codebot test --category fileSystem
+
+# 특정 도구 테스트 실행
+codebot test --category fileSystem --tool ListFilesTool
+
+# 테스트 결과를 파일로 기록
+codebot test --all --log --output test-results.log
+
+# 대화형 테스트 메뉴 실행
+codebot test
+```
+
+### 도구 직접 실행
+Codebot의 내부 도구들을 직접 실행하여 결과를 확인할 수 있습니다:
+
+```bash
+# 대화형 도구 실행 모드 시작
+codebot tool
+
+# 특정 도구 직접 실행
+codebot tool --category fileSystem --name ListFilesTool --params '{"path": "./src"}'
+```
+
 ## 개발
 
 ### 개발 모드 실행
@@ -114,6 +146,18 @@ pnpm dev
 
 ```bash
 pnpm build
+```
+
+### 도구 테스트
+
+```bash
+pnpm test:tools
+```
+
+### 도구 직접 실행 (개발 모드)
+
+```bash
+pnpm tool
 ```
 
 ## 프로젝트 구조
@@ -130,6 +174,14 @@ src/
 │   └── index.ts     # CLI 구현
 ├── prompts/         # 프롬프트 템플릿
 │   └── index.ts     # 프롬프트 정의
+├── test/            # 테스트 시스템
+│   ├── cases/       # 도구별 테스트 케이스
+│   ├── runner.ts    # 테스트 실행기
+│   └── reporter.ts  # 테스트 결과 보고
+├── toolRunner/      # 도구 직접 실행 시스템
+│   ├── executor.ts  # 도구 실행기
+│   ├── prompter.ts  # 사용자 입력 처리
+│   └── renderer.ts  # 결과 시각화
 ├── tools/           # 도구 구현
 │   ├── context/     # 컨텍스트 도구
 │   ├── fileSystem/  # 파일 시스템 도구
