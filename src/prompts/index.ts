@@ -57,6 +57,8 @@ If it requires tools or complex execution:
 - For each subtask, determine what needs to be done, what tools might be needed, and dependencies
 
 Respond in JSON format:
+rules: {{ properties: value }} notation is not standard JSON, but a 'Double Curly Braces Syntax' used in template engines (like Jinja, Handlebars, Liquid, etc.) for dynamic variable insertion in AI prompts.
+Example:
 {{
   "task_type": "simple_response | code_creation | code_modification | code_analysis | environment_setup",
   "requires_tools": true/false,
@@ -93,6 +95,8 @@ Respond in JSON format:
 - 각 하위 작업에 대해 무엇을 해야 하는지, 어떤 도구가 필요할 수 있는지, 의존성을 결정하세요
 
 JSON 형식으로 응답하세요:
+규칙: {{ properties: value }} 표기법은 일반적인 JSON이 아니라, 템플릿 엔진(Jinja, Handlebars, Liquid 등)에서 사용되는 ’이중 중괄호 표기법(Double Curly Braces Syntax)’입니다. AI 프롬프트에서 보통 변수를 동적으로 삽입하는 용도로 사용됩니다.
+예시:
 {
   "task_type": "simple_response | code_creation | code_modification | code_analysis | environment_setup",
   "requires_tools": true/false,
@@ -143,6 +147,7 @@ Available tools in the system:
 - RetrieveMemoryTool: Retrieves data from memory
 
 For each potential tool mentioned in the subtasks, map it to one or more available tools from the above list.
+If a subtask has empty potential_tools (an empty array), analyze what the subtask is trying to accomplish and recommend appropriate tools from the available list.
 If a potential tool doesn't exactly match available tools, map it to the most appropriate one.
 For any unfamiliar tool, use ExecuteCommandTool as it can handle most external processes.
 
@@ -156,7 +161,8 @@ For each step, specify:
 4. How to validate the results
 
 Respond in the following format:
-
+rules: {{ properties: value }} notation is not standard JSON, but a 'Double Curly Braces Syntax' used in template engines (like Jinja, Handlebars, Liquid, etc.) for dynamic variable insertion in AI prompts.
+Example:
 \`\`\`json
 {{
   "refined_subtasks": [
@@ -188,6 +194,7 @@ Important notes:
 1. The "refined_subtasks" must match the TaskAnalysis subtasks format with only these fields: id, description, potential_tools, and dependencies.
 2. The "plan" must follow the ExecutionPlan structure with these exact fields: step_id, action, tool, tool_inputs, and validation.
 3. Make sure the plan covers all the necessary steps to complete the task.
+4. For any subtask without specified tools (empty potential_tools), perform a full analysis of the subtask and determine the most appropriate tool from the available list.
 
 Ensure your plan is thorough and accounts for every subtask in the task analysis.`;
 
@@ -219,6 +226,7 @@ Ensure your plan is thorough and accounts for every subtask in the task analysis
 - RetrieveMemoryTool: 메모리에서 데이터를 검색합니다
 
 서브태스크에 언급된 각 잠재적 도구에 대해, 위 목록의 하나 이상의 사용 가능한 도구에 매핑하세요.
+서브태스크에 potential_tools가 비어있는 경우(빈 배열), 해당 서브태스크가 수행하려는 작업을 분석하고 사용 가능한 목록에서 적절한 도구를 추천하세요.
 잠재적 도구가 사용 가능한 도구와 정확히 일치하지 않는 경우, 가장 적합한 도구에 매핑하세요.
 익숙하지 않은 도구의 경우, 대부분의 외부 프로세스를 처리할 수 있는 ExecuteCommandTool을 사용하세요.
 
@@ -264,6 +272,7 @@ Ensure your plan is thorough and accounts for every subtask in the task analysis
 1. "refined_subtasks"는 TaskAnalysis subtasks 형식과 일치해야 하며 id, description, potential_tools, dependencies 필드만 포함해야 합니다.
 2. "plan"은 ExecutionPlan 구조를 따라야 하며 step_id, action, tool, tool_inputs, validation 필드를 정확히 포함해야 합니다.
 3. 계획이 작업을 완료하는 데 필요한 모든 단계를 포함하는지 확인하세요.
+4. 도구가 지정되지 않은 서브태스크(empty potential_tools)의 경우, 서브태스크를 완전히 분석하고 사용 가능한 목록에서 가장 적절한 도구를 결정하세요.
 
 당신의 계획이 작업 분석의 모든 서브태스크를 철저히 고려하도록 하세요.
 */
@@ -282,6 +291,8 @@ Available Tools:
 {available_tools}
 
 Execute this step and report the results. If you need to use a tool, specify the tool call in the following format:
+rules: {{ properties: value }} notation is not standard JSON, but a 'Double Curly Braces Syntax' used in template engines (like Jinja, Handlebars, Liquid, etc.) for dynamic variable insertion in AI prompts.
+Example:
 {{
   "tool": "tool_name",
   "input": {{
@@ -332,6 +343,8 @@ Verify these results and determine:
 3. Whether additional steps are needed
 
 Respond in JSON format:
+rules: {{ properties: value }} notation is not standard JSON, but a 'Double Curly Braces Syntax' used in template engines (like Jinja, Handlebars, Liquid, etc.) for dynamic variable insertion in AI prompts.
+Example:
 {{
   "success": true/false,
   "errors": [
@@ -451,6 +464,8 @@ Analyze this error and determine:
 3. A clear explanation to provide to the user
 
 Respond in JSON format:
+rules: {{ properties: value }} notation is not standard JSON, but a 'Double Curly Braces Syntax' used in template engines (like Jinja, Handlebars, Liquid, etc.) for dynamic variable insertion in AI prompts.
+Example:
 {{
   "error_type": "...",
   "cause": "...",
